@@ -15,14 +15,19 @@ import { forwardByLocalPart, forwardByMailboxConfig } from './email/forwarder.js
 import { parseEmailBody, extractVerificationCode } from './email/parser.js';
 import { getForwardTarget } from './db/mailboxes.js';
 
-// ── 新增：CORS 响应包装器 ──
-function addCorsHeaders(response) {
+// ── 新增：CORS 响应包装器 (支持 Credentials) ──
+function addCorsHeaders(response, request) {
     if (!response) return response; 
     
     const newHeaders = new Headers(response.headers);
-    newHeaders.set('Access-Control-Allow-Origin', '*');
+    // 动态获取请求来源，如果没有就默认 *
+    const origin = request ? (request.headers.get('Origin') || '*') : '*';
+    
+    newHeaders.set('Access-Control-Allow-Origin', origin);
+    newHeaders.set('Access-Control-Allow-Credentials', 'true'); // 允许携带 Cookie
     newHeaders.set('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
     newHeaders.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+    
     return new Response(response.body, {
         status: response.status,
         statusText: response.statusText,
@@ -35,12 +40,14 @@ export default {
    * HTTP请求处理器
    */
   async fetch(request, env, ctx) {
-    // 👇 放行浏览器的 OPTIONS 跨域预检
+    // 👇 修改 1：预检请求也要返回动态的 Origin 和 Credentials
     if (request.method === 'OPTIONS') {
+        const origin = request.headers.get('Origin') || '*';
         return new Response(null, {
             status: 204,
             headers: {
-                'Access-Control-Allow-Origin': '*',
+                'Access-Control-Allow-Origin': origin,
+                'Access-Control-Allow-Credentials': 'true',
                 'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
                 'Access-Control-Allow-Headers': 'Content-Type, Authorization',
                 'Access-Control-Max-Age': '86400',
@@ -67,15 +74,15 @@ export default {
     const router = createRouter();
     router.use(authMiddleware);
 
-    // 👇 修改：用 CORS 包装路由响应
+    // 👇 修改 2：调用工具函数时，把 request 也传进去
     const routeResponse = await router.handle(request, { request, env, ctx });
     if (routeResponse) {
-      return addCorsHeaders(routeResponse);
+      return addCorsHeaders(routeResponse, request); 
     }
 
-    // 👇 修改：用 CORS 包装静态资源响应
+    // 👇 修改 3：同样把 request 传进去
     const assetManager = createAssetManager();
-    return addCorsHeaders(await assetManager.handleAssetRequest(request, env, MAIL_DOMAINS));
+    return addCorsHeaders(await assetManager.handleAssetRequest(request, env, MAIL_DOMAINS), request);
   },
 
   /**
