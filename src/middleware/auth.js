@@ -88,9 +88,9 @@ export function buildSessionCookie(token, reqUrl = '', expireDays = DEFAULT_SESS
     const u = new URL(reqUrl || 'http://localhost/');
     const isHttps = (u.protocol === 'https:');
     const secureFlag = isHttps ? ' Secure;' : '';
-    return `${COOKIE_NAME}=${token}; HttpOnly;${secureFlag} Path=/; SameSite=Strict; Max-Age=${maxAge}`;
+    return `${COOKIE_NAME}=${token}; HttpOnly;${secureFlag} Path=/; SameSite=None; Max-Age=${maxAge}`;
   } catch (_) {
-    return `${COOKIE_NAME}=${token}; HttpOnly; Path=/; SameSite=Strict; Max-Age=${maxAge}`;
+    return `${COOKIE_NAME}=${token}; HttpOnly; Path=/; SameSite=None; Max-Age=${maxAge}`;
   }
 }
 

@@ -133,9 +133,9 @@ export function createRouter() {
       const u = new URL(request.url);
       const isHttps = (u.protocol === 'https:');
       const secureFlag = isHttps ? ' Secure;' : '';
-      headers.set('Set-Cookie', `iding-session=; HttpOnly;${secureFlag} Path=/; SameSite=Strict; Max-Age=0`);
+      headers.set('Set-Cookie', `iding-session=; HttpOnly;${secureFlag} Path=/; SameSite=None; Max-Age=0`);
     } catch (_) {
-      headers.set('Set-Cookie', 'iding-session=; HttpOnly; Path=/; SameSite=Strict; Max-Age=0');
+      headers.set('Set-Cookie', 'iding-session=; HttpOnly; Path=/; SameSite=None; Max-Age=0');
     }
 
     return new Response(JSON.stringify({ success: true }), { headers });
