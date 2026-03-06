@@ -226,7 +226,10 @@ function stripHtml(html) {
 }
 
 /**
- * 从邮件主题、文本和HTML中智能提取验证码（4-8位数字）
+ * 从邮件主题、文本和HTML中智能提取验证码
+ * 支持：
+ * 1) 4-8位数字验证码（如 652317）
+ * 2) 字母数字/短横线组合验证码（如 SDF-WFC、AB12-CD34）
  * @param {object} params - 提取参数对象
  * @param {string} params.subject - 邮件主题
  * @param {string} params.text - 纯文本内容
@@ -243,13 +246,24 @@ export function extractVerificationCode({ subject = '', text = '', html = '' } =
     body: `${textBody} ${htmlBody}`.trim()
   };
 
-  const minLen = 4;
-  const maxLen = 8;
+  const minDigitLen = 4;
+  const maxDigitLen = 8;
+
+  const alphaNumCodeChunk = '([A-Z0-9]{2,8}(?:[-_][A-Z0-9]{2,8}){1,3})';
 
   function normalizeDigits(s) {
     const digits = String(s || '').replace(/\D+/g, '');
-    if (digits.length >= minLen && digits.length <= maxLen) return digits;
+    if (digits.length >= minDigitLen && digits.length <= maxDigitLen) return digits;
     return '';
+  }
+
+  function normalizeAlphaNumCode(s) {
+    const raw = String(s || '').trim().toUpperCase().replace(/_/g, '-');
+    if (!raw) return '';
+    if (!/^[A-Z0-9-]{5,32}$/.test(raw)) return '';
+    if (!/[A-Z]/.test(raw)) return '';
+    if (!/\d/.test(raw) && raw.length < 6) return '';
+    return raw;
   }
 
   const kw = '(?:verification|one[-\\s]?time|two[-\\s]?factor|2fa|security|auth|login|confirm|code|otp|验证码|校验码|驗證碼|確認碼|認證碼|認証コード|인증코드|코드)';
@@ -292,6 +306,38 @@ export function extractVerificationCode({ subject = '', text = '', html = '' } =
         return n;
       }
     }
+  }
+
+  const alphaSubjectOrdereds = [
+    new RegExp(`${kw}[^\n\rA-Z0-9]{0,24}${alphaNumCodeChunk}`, 'i'),
+    new RegExp(`${alphaNumCodeChunk}[^\n\rA-Z0-9]{0,24}${kw}`, 'i'),
+  ];
+  for (const r of alphaSubjectOrdereds) {
+    const m = sources.subject.match(r);
+    if (m && m[1]) {
+      const c = normalizeAlphaNumCode(m[1]);
+      if (c) return c;
+    }
+  }
+
+  const alphaBodyOrdereds = [
+    new RegExp(`${kw}[^\n\rA-Z0-9]{0,40}${alphaNumCodeChunk}`, 'i'),
+    new RegExp(`${alphaNumCodeChunk}[^\n\rA-Z0-9]{0,40}${kw}`, 'i'),
+  ];
+  for (const r of alphaBodyOrdereds) {
+    const m = sources.body.match(r);
+    if (m && m[1]) {
+      const c = normalizeAlphaNumCode(m[1]);
+      if (c) return c;
+    }
+  }
+
+  const genericAlphaCandidates = String(`${sources.subject} ${sources.body}`)
+    .toUpperCase()
+    .match(/\b[A-Z0-9]{2,8}(?:[-_][A-Z0-9]{2,8}){1,3}\b/g) || [];
+  for (const candidate of genericAlphaCandidates) {
+    const c = normalizeAlphaNumCode(candidate);
+    if (c) return c;
   }
 
   return '';
