@@ -125,20 +125,7 @@ async function migrateMailboxesFields(db) {
 
 async function ensureApiKeysTable(db) {
   try {
-    await db.exec(`
-      CREATE TABLE IF NOT EXISTS api_keys (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        name TEXT NOT NULL,
-        key_hash TEXT NOT NULL UNIQUE,
-        scopes TEXT NOT NULL DEFAULT '[]',
-        is_active INTEGER NOT NULL DEFAULT 1,
-        expires_at TEXT,
-        last_used_at TEXT,
-        created_by INTEGER,
-        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY(created_by) REFERENCES users(id) ON DELETE SET NULL
-      );
-    `);
+    await db.exec("CREATE TABLE IF NOT EXISTS api_keys (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, key_hash TEXT NOT NULL UNIQUE, scopes TEXT NOT NULL DEFAULT '[]', is_active INTEGER NOT NULL DEFAULT 1, expires_at TEXT, last_used_at TEXT, created_by INTEGER, created_at TEXT DEFAULT CURRENT_TIMESTAMP, FOREIGN KEY(created_by) REFERENCES users(id) ON DELETE SET NULL);");
     await db.exec(`CREATE INDEX IF NOT EXISTS idx_api_keys_active ON api_keys(is_active);`);
     await db.exec(`CREATE INDEX IF NOT EXISTS idx_api_keys_expires_at ON api_keys(expires_at);`);
     await db.exec(`CREATE INDEX IF NOT EXISTS idx_api_keys_created_at ON api_keys(created_at DESC);`);

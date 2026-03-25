@@ -236,8 +236,19 @@ async function delegateApiRequest(context) {
   const RESEND_API_KEY = env.RESEND_API_KEY || env.RESEND_TOKEN || env.RESEND || '';
   const ADMIN_NAME = String(env.ADMIN_NAME || 'admin').trim().toLowerCase();
 
+  // 外部 API 使用独立的 API Key 鉴权，不依赖会话
+  if (request.url.includes('/api/ext/')) {
+    return handleApiRequest(request, DB, MAIL_DOMAINS, {
+      mockOnly: false,
+      resendApiKey: RESEND_API_KEY,
+      adminName: ADMIN_NAME,
+      r2: env.MAIL_EML,
+      authPayload: authPayload || null
+    });
+  }
+
   // 访客只允许读取模拟数据
-  if ((authPayload.role || 'admin') === 'guest') {
+  if ((authPayload?.role || 'admin') === 'guest') {
     return handleApiRequest(request, DB, MAIL_DOMAINS, {
       mockOnly: true,
       resendApiKey: RESEND_API_KEY,

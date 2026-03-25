@@ -25,6 +25,7 @@ database_id = "b4803635-fc06-4d3a-abcb-cb1f1b9c5162" # 你的database_id
 # 登录会话过期时间（单位：天，默认7天）
 # 环境变量
 [vars]
+MAIL_DOMAIN = "vibewatcher.eu.cc, openclw.ccwu.cc, jhailab.eu.cc, jhai.eu.cc"
 # FORWARD_RULES="[{"prefix":"vip","email":"a@example.com"},{"prefix":"*","email":"2141083706@qq.com"}]"
 
 
