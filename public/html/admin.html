@@ -120,6 +120,47 @@
       <div class="admin-right">
         <div class="card">
           <div class="card-header">
+            <h2><span class="card-icon">🔑</span><span>External API</span><span id="api-key-count" class="users-count">（0 Keys）</span></h2>
+            <div class="api-card-actions">
+              <button id="api-key-create-open" class="btn btn-primary btn-sm">
+                <span>➕</span>
+                <span>创建 Key</span>
+              </button>
+              <button id="api-keys-refresh" class="btn btn-ghost btn-sm" title="刷新 API Keys">
+                <span>🔄</span>
+                <span>刷新</span>
+              </button>
+            </div>
+          </div>
+          <div id="api-keys-loading" class="loading-indicator" style="margin: 4px 0 8px 0; display:none">
+            <div class="spinner"></div>
+            <span>加载中…</span>
+          </div>
+          <div class="api-doc-callout selectable">
+            <div><strong>鉴权：</strong><code>X-API-Key: &lt;your_key&gt;</code></div>
+            <div><strong>接口：</strong><code>/api/ext/domains</code> · <code>/api/ext/accounts</code> · <code>/api/ext/messages/latest-code</code></div>
+          </div>
+          <div class="table-container">
+            <table class="table api-keys-table">
+              <thead>
+                <tr>
+                  <th>名称</th>
+                  <th>Scopes</th>
+                  <th>状态</th>
+                  <th>最后使用</th>
+                  <th>过期时间</th>
+                  <th>创建时间</th>
+                  <th>操作</th>
+                </tr>
+              </thead>
+              <tbody id="api-keys-body"></tbody>
+            </table>
+          </div>
+          <div id="api-key-empty" class="empty">暂无 API Key</div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
             <h2><span class="card-icon">📦</span><span>用户的邮箱列表</span><span id="mailboxes-count" class="mailboxes-count">（0 邮箱）</span></h2>
             <button id="mailboxes-refresh" class="btn btn-ghost btn-sm" title="刷新邮箱列表" style="display:none">
               <span>🔄</span>
@@ -250,6 +291,55 @@
           <div class="modal-footer" style="display:flex;gap:8px;justify-content:flex-end;padding:12px 16px">
             <button id="a-cancel" class="btn btn-secondary">取消</button>
             <button id="a-assign" class="btn btn-primary">分配</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="modal" id="api-key-create-modal">
+        <div class="modal-card">
+          <div class="modal-header">
+            <div>
+              <span class="modal-icon">🔑</span>
+              <span>创建 API Key</span>
+            </div>
+            <button id="api-key-create-close" class="close">✕</button>
+          </div>
+          <div class="modal-body">
+            <div class="config-form">
+              <div class="config-item"><label class="config-label">名称</label><input id="api-key-name" class="input" placeholder="例如：Python 脚本" /></div>
+              <div class="config-item"><label class="config-label">过期时间</label><input id="api-key-expires-at" class="input" type="datetime-local" /></div>
+              <div class="config-item">
+                <label class="config-label">权限范围</label>
+                <div id="api-key-scopes" class="api-scope-list"></div>
+              </div>
+            </div>
+          </div>
+          <div class="modal-footer" style="display:flex;gap:8px;justify-content:flex-end;padding:12px 16px">
+            <button id="api-key-create-cancel" class="btn btn-secondary">取消</button>
+            <button id="api-key-create-submit" class="btn btn-primary">创建</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="modal" id="api-key-result-modal">
+        <div class="modal-card">
+          <div class="modal-header">
+            <div>
+              <span class="modal-icon">✅</span>
+              <span>API Key 已创建</span>
+            </div>
+            <button id="api-key-result-close" class="close">✕</button>
+          </div>
+          <div class="modal-body">
+            <div class="api-doc-callout selectable">明文 Key 只会显示这一次，请立即保存。</div>
+            <div class="config-item">
+              <label class="config-label">API Key</label>
+              <textarea id="api-key-value" class="input selectable" rows="3" readonly></textarea>
+            </div>
+          </div>
+          <div class="modal-footer" style="display:flex;gap:8px;justify-content:flex-end;padding:12px 16px">
+            <button id="api-key-copy" class="btn btn-secondary">复制</button>
+            <button id="api-key-result-ok" class="btn btn-primary">我已保存</button>
           </div>
         </div>
       </div>

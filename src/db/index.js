@@ -26,3 +26,12 @@ export {
   recordSentEmail,
   updateSentEmail
 } from './sentEmails.js';
+export {
+  ALLOWED_API_KEY_SCOPES,
+  createApiKey,
+  listApiKeys,
+  revokeApiKey,
+  findApiKeyByRawKey,
+  touchApiKeyUsage,
+  hasApiKeyScope
+} from './apiKeys.js';

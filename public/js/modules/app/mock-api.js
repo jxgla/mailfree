@@ -309,6 +309,84 @@ export async function mockApi(path, options = {}) {
     return new Response(JSON.stringify({ limit: 999, used: MOCK_STATE.mailboxes.length, remaining: 997 }), { headers: jsonHeaders });
   }
 
+  // POST /api/users/unassign
+  if (url.pathname === '/api/users/unassign' && options.method === 'POST') {
+    return new Response(JSON.stringify({ success: true }), { headers: jsonHeaders });
+  }
+
+  // API Key 管理（演示模式）
+  if (!window.__MOCK_API_KEYS__) {
+    window.__MOCK_API_KEYS__ = [
+      {
+        id: 1,
+        name: 'Demo Integration',
+        scopes: ['domains:read', 'accounts:write', 'messages:read'],
+        is_active: true,
+        created_at: new Date().toISOString(),
+        last_used_at: null,
+        expires_at: null
+      }
+    ];
+  }
+
+  if (url.pathname === '/api/admin/api-keys/meta' && (!options.method || options.method === 'GET')) {
+    return new Response(JSON.stringify({ scopes: ['domains:read', 'accounts:write', 'messages:read'] }), { headers: jsonHeaders });
+  }
+
+  if (url.pathname === '/api/admin/api-keys' && (!options.method || options.method === 'GET')) {
+    return new Response(JSON.stringify({ list: window.__MOCK_API_KEYS__ }), { headers: jsonHeaders });
+  }
+
+  if (url.pathname === '/api/admin/api-keys' && options.method === 'POST') {
+    const body = typeof options.body === 'string' ? JSON.parse(options.body || '{}') : (options.body || {});
+    const nextId = (window.__MOCK_API_KEYS__.at(-1)?.id || 0) + 1;
+    const item = {
+      id: nextId,
+      name: body.name || `Key ${nextId}`,
+      scopes: Array.isArray(body.scopes) ? body.scopes : [],
+      is_active: true,
+      created_at: new Date().toISOString(),
+      last_used_at: null,
+      expires_at: body.expires_at || null
+    };
+    window.__MOCK_API_KEYS__.push(item);
+    return new Response(JSON.stringify({ success: true, item, key: `mf_demo_${nextId}` }), { headers: jsonHeaders });
+  }
+
+  if (url.pathname.startsWith('/api/admin/api-keys/') && options.method === 'DELETE') {
+    const id = Number(url.pathname.split('/')[4]);
+    window.__MOCK_API_KEYS__ = (window.__MOCK_API_KEYS__ || []).map(item => item.id === id ? { ...item, is_active: false } : item);
+    return new Response(JSON.stringify({ success: true, revoked: true }), { headers: jsonHeaders });
+  }
+
+  // 外部 API（演示模式）
+  if (url.pathname === '/api/ext/domains' && (!options.method || options.method === 'GET')) {
+    return new Response(JSON.stringify({ domains: MOCK_STATE.domains }), { headers: jsonHeaders });
+  }
+
+  if (url.pathname === '/api/ext/accounts' && options.method === 'POST') {
+    const body = typeof options.body === 'string' ? JSON.parse(options.body || '{}') : (options.body || {});
+    const address = body.address || `${body.local || 'demo'}@${body.domain || MOCK_STATE.domains[0] || 'example.com'}`;
+    return new Response(JSON.stringify({
+      id: MOCK_STATE.nextMailboxId++,
+      address,
+      created: true,
+      created_at: new Date().toISOString().replace('T', ' ').slice(0, 19)
+    }), { headers: jsonHeaders, status: 201 });
+  }
+
+  if (url.pathname === '/api/ext/messages/latest-code' && (!options.method || options.method === 'GET')) {
+    const mailbox = url.searchParams.get('mailbox') || `demo@${MOCK_STATE.domains[0] || 'example.com'}`;
+    return new Response(JSON.stringify({
+      mailbox,
+      verification_code: '123456',
+      subject: '[演示数据] 您的验证码是 123456',
+      sender: 'support@example.com',
+      received_at: new Date().toISOString(),
+      message_id: 1001
+    }), { headers: jsonHeaders });
+  }
+
   // GET /api/session
   if (url.pathname === '/api/session') {
     return new Response(JSON.stringify({ authenticated: true, role: 'guest', username: 'guest' }), { headers: jsonHeaders });

@@ -283,7 +283,8 @@ export async function authMiddleware(context) {
   const url = new URL(request.url);
 
   const publicPaths = ['/api/login', '/api/logout'];
-  if (publicPaths.includes(url.pathname)) {
+  const publicPrefixes = ['/api/ext/'];
+  if (publicPaths.includes(url.pathname) || publicPrefixes.some(prefix => url.pathname.startsWith(prefix))) {
     return null;
   }
 

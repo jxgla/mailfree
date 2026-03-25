@@ -119,6 +119,29 @@ export async function unassignMailbox(username, address) {
   });
 }
 
+export async function getApiKeys() {
+  const r = await api('/api/admin/api-keys');
+  return r.json();
+}
+
+export async function getApiKeyMeta() {
+  const r = await api('/api/admin/api-keys/meta');
+  return r.json();
+}
+
+export async function createApiKey(data) {
+  const r = await api('/api/admin/api-keys', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data)
+  });
+  return r.json();
+}
+
+export async function revokeApiKey(id) {
+  return api(`/api/admin/api-keys/${id}`, { method: 'DELETE' });
+}
+
 export default {
   api,
   getUsers,
@@ -127,5 +150,9 @@ export default {
   deleteUser,
   getUserMailboxes,
   assignMailbox,
-  unassignMailbox
+  unassignMailbox,
+  getApiKeys,
+  getApiKeyMeta,
+  createApiKey,
+  revokeApiKey
 };

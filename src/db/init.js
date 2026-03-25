@@ -45,8 +45,10 @@ async function performFirstTimeSetup(db) {
     await db.prepare('SELECT 1 FROM users LIMIT 1').all();
     await db.prepare('SELECT 1 FROM user_mailboxes LIMIT 1').all();
     await db.prepare('SELECT 1 FROM sent_emails LIMIT 1').all();
-    // 所有5个必要表都存在，执行字段迁移
+    await db.prepare('SELECT 1 FROM api_keys LIMIT 1').all();
+    // 所有必要表都存在，执行字段迁移
     await migrateMailboxesFields(db);
+    await ensureApiKeysTable(db);
     return;
   } catch (e) {
     // 有表不存在，继续初始化
@@ -59,7 +61,8 @@ async function performFirstTimeSetup(db) {
   await db.exec("CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT NOT NULL UNIQUE, password_hash TEXT, role TEXT NOT NULL DEFAULT 'user', can_send INTEGER NOT NULL DEFAULT 0, mailbox_limit INTEGER NOT NULL DEFAULT 10, created_at TEXT DEFAULT CURRENT_TIMESTAMP);");
   await db.exec("CREATE TABLE IF NOT EXISTS user_mailboxes (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, mailbox_id INTEGER NOT NULL, created_at TEXT DEFAULT CURRENT_TIMESTAMP, is_pinned INTEGER NOT NULL DEFAULT 0, UNIQUE(user_id, mailbox_id), FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE, FOREIGN KEY(mailbox_id) REFERENCES mailboxes(id) ON DELETE CASCADE);");
   await db.exec("CREATE TABLE IF NOT EXISTS sent_emails (id INTEGER PRIMARY KEY AUTOINCREMENT, resend_id TEXT, from_name TEXT, from_addr TEXT NOT NULL, to_addrs TEXT NOT NULL, subject TEXT NOT NULL, html_content TEXT, text_content TEXT, status TEXT DEFAULT 'queued', scheduled_at TEXT, created_at TEXT DEFAULT CURRENT_TIMESTAMP, updated_at TEXT DEFAULT CURRENT_TIMESTAMP);");
-  
+  await db.exec("CREATE TABLE IF NOT EXISTS api_keys (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, key_hash TEXT NOT NULL UNIQUE, scopes TEXT NOT NULL DEFAULT '[]', is_active INTEGER NOT NULL DEFAULT 1, expires_at TEXT, last_used_at TEXT, created_by INTEGER, created_at TEXT DEFAULT CURRENT_TIMESTAMP, FOREIGN KEY(created_by) REFERENCES users(id) ON DELETE SET NULL);");
+
   // 创建索引
   await createIndexes(db);
 }
@@ -86,6 +89,9 @@ async function createIndexes(db) {
   await db.exec(`CREATE INDEX IF NOT EXISTS idx_sent_emails_resend_id ON sent_emails(resend_id);`);
   await db.exec(`CREATE INDEX IF NOT EXISTS idx_sent_emails_status_created ON sent_emails(status, created_at DESC);`);
   await db.exec(`CREATE INDEX IF NOT EXISTS idx_sent_emails_from_addr ON sent_emails(from_addr);`);
+  await db.exec(`CREATE INDEX IF NOT EXISTS idx_api_keys_active ON api_keys(is_active);`);
+  await db.exec(`CREATE INDEX IF NOT EXISTS idx_api_keys_expires_at ON api_keys(expires_at);`);
+  await db.exec(`CREATE INDEX IF NOT EXISTS idx_api_keys_created_at ON api_keys(created_at DESC);`);
 }
 
 /**
@@ -98,13 +104,13 @@ async function migrateMailboxesFields(db) {
   try {
     const columns = await db.prepare("PRAGMA table_info(mailboxes)").all();
     const columnNames = (columns.results || []).map(c => c.name);
-    
+
     // 添加 forward_to 字段（转发目标）
     if (!columnNames.includes('forward_to')) {
       await db.exec("ALTER TABLE mailboxes ADD COLUMN forward_to TEXT DEFAULT NULL;");
       console.log('已添加 mailboxes.forward_to 字段');
     }
-    
+
     // 添加 is_favorite 字段（收藏状态）
     if (!columnNames.includes('is_favorite')) {
       await db.exec("ALTER TABLE mailboxes ADD COLUMN is_favorite INTEGER DEFAULT 0;");
@@ -114,6 +120,30 @@ async function migrateMailboxesFields(db) {
   } catch (error) {
     console.error('mailboxes 字段迁移失败:', error);
     // 不抛出异常，允许继续运行
+  }
+}
+
+async function ensureApiKeysTable(db) {
+  try {
+    await db.exec(`
+      CREATE TABLE IF NOT EXISTS api_keys (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        key_hash TEXT NOT NULL UNIQUE,
+        scopes TEXT NOT NULL DEFAULT '[]',
+        is_active INTEGER NOT NULL DEFAULT 1,
+        expires_at TEXT,
+        last_used_at TEXT,
+        created_by INTEGER,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY(created_by) REFERENCES users(id) ON DELETE SET NULL
+      );
+    `);
+    await db.exec(`CREATE INDEX IF NOT EXISTS idx_api_keys_active ON api_keys(is_active);`);
+    await db.exec(`CREATE INDEX IF NOT EXISTS idx_api_keys_expires_at ON api_keys(expires_at);`);
+    await db.exec(`CREATE INDEX IF NOT EXISTS idx_api_keys_created_at ON api_keys(created_at DESC);`);
+  } catch (error) {
+    console.error('api_keys 表初始化失败:', error);
   }
 }
 
@@ -202,7 +232,22 @@ export async function setupDatabase(db) {
       updated_at TEXT DEFAULT CURRENT_TIMESTAMP
     );
   `);
-  
+
+  await db.exec(`
+    CREATE TABLE IF NOT EXISTS api_keys (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      key_hash TEXT NOT NULL UNIQUE,
+      scopes TEXT NOT NULL DEFAULT '[]',
+      is_active INTEGER NOT NULL DEFAULT 1,
+      expires_at TEXT,
+      last_used_at TEXT,
+      created_by INTEGER,
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY(created_by) REFERENCES users(id) ON DELETE SET NULL
+    );
+  `);
+
   // 创建所有索引
   await createIndexes(db);
 }

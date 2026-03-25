@@ -7,7 +7,9 @@ import { handleUsersApi } from './users.js';
 import { handleMailboxesApi } from './mailboxes.js';
 import { handleEmailsApi } from './emails.js';
 import { handleSendApi } from './send.js';
-import { getJwtPayload, errorResponse } from './helpers.js';
+import { handleApiKeysApi } from './apiKeys.js';
+import { handleExternalApi } from './external.js';
+import { getJwtPayload, errorResponse, isStrictAdmin } from './helpers.js';
 
 /**
  * 处理所有 API 请求
@@ -29,6 +31,11 @@ export async function handleApiRequest(request, db, mailDomains, options = {
   const path = url.pathname;
   const isMock = !!options.mockOnly;
   const isMailboxOnly = !!options.mailboxOnly;
+  const strictAdmin = isStrictAdmin(request, options);
+
+  if (path.startsWith('/api/ext/')) {
+    return await handleExternalApi(request, db, mailDomains, url, path, options);
+  }
 
   // 邮箱用户只能访问特定的API端点和自己的数据
   if (isMailboxOnly) {
@@ -82,6 +89,10 @@ export async function handleApiRequest(request, db, mailDomains, options = {
   response = await handleUsersApi(request, db, url, path, options);
   if (response) return response;
 
+  // API Key 管理 API
+  response = await handleApiKeysApi(request, db, url, path, { ...options, strictAdmin });
+  if (response) return response;
+
   // 邮箱管理 API
   response = await handleMailboxesApi(request, db, mailDomains, url, path, options);
   if (response) return response;
@@ -101,3 +112,5 @@ export { handleUsersApi } from './users.js';
 export { handleMailboxesApi } from './mailboxes.js';
 export { handleEmailsApi } from './emails.js';
 export { handleSendApi } from './send.js';
+export { handleApiKeysApi } from './apiKeys.js';
+export { handleExternalApi } from './external.js';

@@ -10,6 +10,7 @@
 - [邮件发送](#邮件发送)
 - [用户管理](#用户管理)
 - [系统接口](#系统接口)
+- [外部 API](#外部-api)
 
 ---
 
@@ -778,6 +779,115 @@ curl "https://your.domain/api/session?admin_token=<JWT_TOKEN>"
 邮件接收回调（用于 Cloudflare Email Routing）
 
 > 需要认证，通常由系统内部调用
+
+---
+
+## 外部 API
+
+> 这组接口用于脚本/程序调用，和站内管理接口分离。
+>
+> 鉴权方式：
+> - `X-API-Key: <your_api_key>`
+> - 或 `Authorization: Bearer <your_api_key>`
+>
+> API Key 由管理面板中的 External API 模块创建与撤销。
+
+### GET /api/ext/domains
+获取可用域名列表。
+
+**所需权限：** `domains:read`
+
+**返回：**
+```json
+{
+  "domains": ["example.com", "mail.example.com"]
+}
+```
+
+### POST /api/ext/accounts
+创建外部调用邮箱。
+
+**所需权限：** `accounts:write`
+
+**请求参数（支持以下几种方式）：**
+```json
+{
+  "address": "mybox@example.com"
+}
+```
+
+```json
+{
+  "local": "mybox",
+  "domain": "example.com"
+}
+```
+
+```json
+{
+  "local": "mybox"
+}
+```
+
+```json
+{}
+```
+
+说明：
+- 传 `address`：使用完整邮箱地址
+- 传 `local + domain`：使用指定前缀和指定域名
+- 只传 `local`：系统会从 `MAIL_DOMAIN` 中自动随机选择一个域名
+- 什么都不传：系统会自动生成随机前缀，并从 `MAIL_DOMAIN` 中自动随机选择一个域名
+
+**返回：**
+```json
+{
+  "id": 123,
+  "address": "mybox@example.com",
+  "created": true,
+  "created_at": "2026-03-25 12:00:00"
+}
+```
+
+- 当邮箱首次创建时返回 `201`
+- 当邮箱已存在且幂等返回时返回 `200`，`created` 为 `false`
+
+### GET /api/ext/messages/latest-code
+获取指定邮箱最近一封带验证码邮件中的验证码。
+
+**所需权限：** `messages:read`
+
+**参数：**
+| 参数 | 类型 | 说明 |
+|------|------|------|
+| `mailbox` | string | 邮箱地址（必需） |
+
+**返回：**
+```json
+{
+  "mailbox": "mybox@example.com",
+  "verification_code": "123456",
+  "subject": "Your verification code",
+  "sender": "noreply@example.com",
+  "received_at": "2026-03-25 12:34:56",
+  "message_id": 456
+}
+```
+
+**调用示例：**
+
+```bash
+curl -H "X-API-Key: <your_api_key>" \
+  https://your.domain/api/ext/domains
+
+curl -X POST https://your.domain/api/ext/accounts \
+  -H "X-API-Key: <your_api_key>" \
+  -H "Content-Type: application/json" \
+  -d '{"local":"demo123","domain":"example.com"}'
+
+curl -H "X-API-Key: <your_api_key>" \
+  "https://your.domain/api/ext/messages/latest-code?mailbox=demo123@example.com"
+```
 
 ---
 
