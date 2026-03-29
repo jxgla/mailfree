@@ -27,6 +27,12 @@ export {
   updateSentEmail
 } from './sentEmails.js';
 export {
+  getSystemSetting,
+  setSystemSetting,
+  getMailboxAddressingSettings,
+  updateMailboxAddressingSettings
+} from './settings.js';
+export {
   ALLOWED_API_KEY_SCOPES,
   createApiKey,
   listApiKeys,

@@ -185,6 +185,29 @@
             </div>
           </div>
         </div>
+
+        <div id="mailbox-settings-card" class="card">
+          <div class="card-header">
+            <h2><span class="card-icon">✉️</span><span>邮箱格式设置</span></h2>
+          </div>
+          <div class="config-form">
+            <div class="config-item">
+              <label class="config-label">默认邮箱格式</label>
+              <div class="checks-row">
+                <label class="toggle"><input id="mailbox-format-v1" type="radio" name="mailbox-format" value="v1" /><span>原版 xxx@域名</span></label>
+                <label class="toggle"><input id="mailbox-format-v2" type="radio" name="mailbox-format" value="v2" checked /><span>新版 xxx@yyy.域名</span></label>
+              </div>
+            </div>
+            <div class="config-item">
+              <label class="config-label">新版默认 yyy 长度</label>
+              <input id="mailbox-sub-len" class="input" type="number" min="3" max="30" value="3" />
+              <div id="mailbox-settings-status" class="help-text">当前默认：新版 xxx@yyy.域名</div>
+            </div>
+            <div class="generate-action">
+              <button id="mailbox-settings-save" class="btn btn-primary">保存邮箱格式设置</button>
+            </div>
+          </div>
+        </div>
       </div>
       <div id="toast" class="toast"></div>
 

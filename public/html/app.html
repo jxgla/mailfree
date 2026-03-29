@@ -122,6 +122,59 @@
               </div>
               <div class="config-item">
                 <label class="config-label">
+                  <span class="label-icon">🧩</span>
+                  <span>邮箱格式</span>
+                </label>
+                <div class="format-switch-group">
+                  <label class="toggle compact-toggle">
+                    <input id="format-version-v1" type="radio" name="format-version" value="v1" />
+                    <span>原版 xxx@域名</span>
+                  </label>
+                  <label class="toggle compact-toggle">
+                    <input id="format-version-v2" type="radio" name="format-version" value="v2" checked />
+                    <span>新版 xxx@yyy.域名</span>
+                  </label>
+                </div>
+              </div>
+              <div id="subdomain-config" class="config-item">
+                <label class="config-label">
+                  <span class="label-icon">🏷️</span>
+                  <span>二级前缀 yyy</span>
+                </label>
+                <div class="format-switch-group">
+                  <label class="toggle compact-toggle">
+                    <input id="subdomain-mode-random" type="radio" name="subdomain-mode" value="random" checked />
+                    <span>随机</span>
+                  </label>
+                  <label class="toggle compact-toggle">
+                    <input id="subdomain-mode-custom" type="radio" name="subdomain-mode" value="custom" />
+                    <span>自定义</span>
+                  </label>
+                </div>
+              </div>
+              <div id="subdomain-len-item" class="config-item">
+                <label class="config-label">
+                  <span class="label-icon">📏</span>
+                  <span>yyy 长度</span>
+                </label>
+                <div class="range-container">
+                  <input id="subdomain-len-range" class="range" type="range" min="3" max="30" step="1" value="3" />
+                  <div class="range-display">
+                    <span id="subdomain-len-val" class="len-value">3</span>
+                    <span class="len-unit">位</span>
+                  </div>
+                </div>
+              </div>
+              <div id="subdomain-custom-item" class="config-item" style="display:none">
+                <label class="config-label">
+                  <span class="label-icon">✍️</span>
+                  <span>自定义 yyy</span>
+                </label>
+                <input id="subdomain-custom-input" class="input" type="text" placeholder="仅限字母/数字/-" />
+                <div class="help-text">新版邮箱将生成为 xxx@yyy.域名</div>
+              </div>
+              <div class="config-item">
+                <label class="config-label">
                   <span class="label-icon">📏</span>
                   <span>用户名长度</span>
                 </label>

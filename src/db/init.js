@@ -17,13 +17,13 @@ export async function initDatabase(db) {
   try {
     // 清理过期缓存
     clearExpiredCache();
-    
+
     // 仅首次启动时执行完整初始化
     if (_isFirstInit) {
       await performFirstTimeSetup(db);
       _isFirstInit = false;
     }
-    
+
     // 每次都确保外键约束开启
     await db.exec(`PRAGMA foreign_keys = ON;`);
   } catch (error) {
@@ -46,15 +46,17 @@ async function performFirstTimeSetup(db) {
     await db.prepare('SELECT 1 FROM user_mailboxes LIMIT 1').all();
     await db.prepare('SELECT 1 FROM sent_emails LIMIT 1').all();
     await db.prepare('SELECT 1 FROM api_keys LIMIT 1').all();
+    await db.prepare('SELECT 1 FROM system_settings LIMIT 1').all();
     // 所有必要表都存在，执行字段迁移
     await migrateMailboxesFields(db);
     await ensureApiKeysTable(db);
+    await ensureSystemSettingsTable(db);
     return;
   } catch (e) {
     // 有表不存在，继续初始化
     console.log('检测到数据库表不完整，开始初始化...');
   }
-  
+
   // 创建表结构（仅在表不存在时）- 包含新字段 forward_to 和 is_favorite
   await db.exec("CREATE TABLE IF NOT EXISTS mailboxes (id INTEGER PRIMARY KEY AUTOINCREMENT, address TEXT NOT NULL UNIQUE, local_part TEXT NOT NULL, domain TEXT NOT NULL, password_hash TEXT, created_at TEXT DEFAULT CURRENT_TIMESTAMP, last_accessed_at TEXT, expires_at TEXT, is_pinned INTEGER DEFAULT 0, can_login INTEGER DEFAULT 0, forward_to TEXT DEFAULT NULL, is_favorite INTEGER DEFAULT 0);");
   await db.exec("CREATE TABLE IF NOT EXISTS messages (id INTEGER PRIMARY KEY AUTOINCREMENT, mailbox_id INTEGER NOT NULL, sender TEXT NOT NULL, to_addrs TEXT NOT NULL DEFAULT '', subject TEXT NOT NULL, verification_code TEXT, preview TEXT, r2_bucket TEXT NOT NULL DEFAULT 'mail-eml', r2_object_key TEXT NOT NULL DEFAULT '', received_at TEXT DEFAULT CURRENT_TIMESTAMP, is_read INTEGER DEFAULT 0, FOREIGN KEY(mailbox_id) REFERENCES mailboxes(id));");
@@ -62,6 +64,7 @@ async function performFirstTimeSetup(db) {
   await db.exec("CREATE TABLE IF NOT EXISTS user_mailboxes (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, mailbox_id INTEGER NOT NULL, created_at TEXT DEFAULT CURRENT_TIMESTAMP, is_pinned INTEGER NOT NULL DEFAULT 0, UNIQUE(user_id, mailbox_id), FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE, FOREIGN KEY(mailbox_id) REFERENCES mailboxes(id) ON DELETE CASCADE);");
   await db.exec("CREATE TABLE IF NOT EXISTS sent_emails (id INTEGER PRIMARY KEY AUTOINCREMENT, resend_id TEXT, from_name TEXT, from_addr TEXT NOT NULL, to_addrs TEXT NOT NULL, subject TEXT NOT NULL, html_content TEXT, text_content TEXT, status TEXT DEFAULT 'queued', scheduled_at TEXT, created_at TEXT DEFAULT CURRENT_TIMESTAMP, updated_at TEXT DEFAULT CURRENT_TIMESTAMP);");
   await db.exec("CREATE TABLE IF NOT EXISTS api_keys (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, key_hash TEXT NOT NULL UNIQUE, scopes TEXT NOT NULL DEFAULT '[]', is_active INTEGER NOT NULL DEFAULT 1, expires_at TEXT, last_used_at TEXT, created_by INTEGER, created_at TEXT DEFAULT CURRENT_TIMESTAMP, FOREIGN KEY(created_by) REFERENCES users(id) ON DELETE SET NULL);");
+  await db.exec("CREATE TABLE IF NOT EXISTS system_settings (key TEXT PRIMARY KEY, value TEXT NOT NULL, updated_at TEXT DEFAULT CURRENT_TIMESTAMP);");
 
   // 创建索引
   await createIndexes(db);
@@ -134,6 +137,14 @@ async function ensureApiKeysTable(db) {
   }
 }
 
+async function ensureSystemSettingsTable(db) {
+  try {
+    await db.exec("CREATE TABLE IF NOT EXISTS system_settings (key TEXT PRIMARY KEY, value TEXT NOT NULL, updated_at TEXT DEFAULT CURRENT_TIMESTAMP);");
+  } catch (error) {
+    console.error('system_settings 表初始化失败:', error);
+  }
+}
+
 /**
  * 完整的数据库设置脚本（用于首次部署）
  * 可通过 wrangler d1 execute 或管理面板执行
@@ -142,7 +153,7 @@ async function ensureApiKeysTable(db) {
  */
 export async function setupDatabase(db) {
   await db.exec(`PRAGMA foreign_keys = ON;`);
-  
+
   // 创建所有表
   await db.exec(`
     CREATE TABLE IF NOT EXISTS mailboxes (
@@ -160,7 +171,7 @@ export async function setupDatabase(db) {
       is_favorite INTEGER DEFAULT 0
     );
   `);
-  
+
   await db.exec(`
     CREATE TABLE IF NOT EXISTS messages (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -177,7 +188,7 @@ export async function setupDatabase(db) {
       FOREIGN KEY(mailbox_id) REFERENCES mailboxes(id)
     );
   `);
-  
+
   await db.exec(`
     CREATE TABLE IF NOT EXISTS users (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -189,7 +200,7 @@ export async function setupDatabase(db) {
       created_at TEXT DEFAULT CURRENT_TIMESTAMP
     );
   `);
-  
+
   await db.exec(`
     CREATE TABLE IF NOT EXISTS user_mailboxes (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -202,7 +213,7 @@ export async function setupDatabase(db) {
       FOREIGN KEY(mailbox_id) REFERENCES mailboxes(id) ON DELETE CASCADE
     );
   `);
-  
+
   await db.exec(`
     CREATE TABLE IF NOT EXISTS sent_emails (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -232,7 +243,15 @@ export async function setupDatabase(db) {
       created_by INTEGER,
       created_at TEXT DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY(created_by) REFERENCES users(id) ON DELETE SET NULL
-    );
+    )
+  `);
+
+  await db.exec(`
+    CREATE TABLE IF NOT EXISTS system_settings (
+      key TEXT PRIMARY KEY,
+      value TEXT NOT NULL,
+      updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+    )
   `);
 
   // 创建所有索引

@@ -15,10 +15,26 @@ import { getCurrentMailbox, setCurrentMailbox, loadCurrentMailbox, clearCurrentM
 import { renderPager, sliceByPage, prevPage, nextPage, resetPager, setView, isSentViewActive, renderEmailItem, markViewLoaded, isFirstLoad } from './modules/app/email-list.js';
 import { renderMailboxList, renderMbPager, getCurrentPage, setCurrentPage, getPageSize, prevMbPage, nextMbPage, resetMbPage, setSearchTerm, getSearchTerm, setLoading, isLoadingMailboxes, setLastCount, getLastCount } from './modules/app/mailbox-list.js';
 import { initSessionFromCache, validateSession, isGuest, isAdmin, applySessionUI, initGuestMode } from './modules/app/session.js';
-import { loadDomains, getStoredLength, saveLength, updateRangeProgress, getSelectedDomainIndex, populateDomains, STORAGE_KEYS } from './modules/app/domains.js';
+import {
+  loadDomains,
+  DEFAULT_MAILBOX_CONFIG,
+  getStoredLength,
+  saveLength,
+  updateRangeProgress,
+  populateDomains,
+  STORAGE_KEYS,
+  getStoredFormatVersion,
+  saveFormatVersion,
+  getStoredSubdomainMode,
+  saveSubdomainMode,
+  getStoredSubdomainLength,
+  saveSubdomainLength,
+  getStoredSubdomainCustom,
+  saveSubdomainCustom
+} from './modules/app/domains.js';
 import { initCompose, showSentEmailDetail } from './modules/app/compose.js';
 import { showEmailDetail, deleteEmailById, deleteSentById, copyFromEmailList, prefetchEmails } from './modules/app/email-viewer.js';
-import { generateMailbox, generateNameMailbox, createCustomMailbox, updateEmailDisplay, selectMailboxAddress, toggleMailboxPin, deleteMailboxAddress, copyMailboxAddress, clearAllEmails, logout } from './modules/app/mailbox-actions.js';
+import { generateMailbox, generateNameMailbox, createCustomMailbox, selectMailboxAddress, toggleMailboxPin, deleteMailboxAddress, copyMailboxAddress, clearAllEmails, logout } from './modules/app/mailbox-actions.js';
 
 // 全局状态
 window.__GUEST_MODE__ = false;
@@ -68,7 +84,12 @@ const els = {
   sidebarToggle: document.getElementById('sidebar-toggle'), sidebarToggleIcon: document.getElementById('sidebar-toggle-icon'),
   sidebar: document.querySelector('.sidebar'), container: document.querySelector('.container'),
   forwardSetting: document.getElementById('forward-setting'), toggleFavorite: document.getElementById('toggle-favorite'),
-  favoriteIcon: document.getElementById('favorite-icon'), favoriteText: document.getElementById('favorite-text')
+  favoriteIcon: document.getElementById('favorite-icon'), favoriteText: document.getElementById('favorite-text'),
+  formatVersionV1: document.getElementById('format-version-v1'), formatVersionV2: document.getElementById('format-version-v2'),
+  subdomainConfig: document.getElementById('subdomain-config'), subdomainModeRandom: document.getElementById('subdomain-mode-random'),
+  subdomainModeCustom: document.getElementById('subdomain-mode-custom'), subdomainLenItem: document.getElementById('subdomain-len-item'),
+  subdomainLenRange: document.getElementById('subdomain-len-range'), subdomainLenVal: document.getElementById('subdomain-len-val'),
+  subdomainCustomItem: document.getElementById('subdomain-custom-item'), subdomainCustomInput: document.getElementById('subdomain-custom-input')
 };
 const lenRange = document.getElementById('len-range'), lenVal = document.getElementById('len-val'), domainSelect = document.getElementById('domain-select');
 
@@ -124,6 +145,14 @@ async function loadMailboxes(opts = {}) {
 
 function updateMailboxInfoUI(info) { if (!info) return; if (els.favoriteIcon && els.favoriteText) { els.favoriteIcon.textContent = info.is_favorite ? '⭐' : '☆'; els.favoriteText.textContent = info.is_favorite ? '已收藏' : '收藏'; }}
 
+function updateSubdomainUI() {
+  const version = els.formatVersionV1?.checked ? 'v1' : 'v2';
+  const mode = els.subdomainModeCustom?.checked ? 'custom' : 'random';
+  if (els.subdomainConfig) els.subdomainConfig.style.display = version === 'v2' ? '' : 'none';
+  if (els.subdomainLenItem) els.subdomainLenItem.style.display = version === 'v2' && mode === 'random' ? '' : 'none';
+  if (els.subdomainCustomItem) els.subdomainCustomItem.style.display = version === 'v2' && mode === 'custom' ? '' : 'none';
+}
+
 // 全局函数
 window.selectMailbox = (addr) => selectMailboxAddress(addr, els, api, refresh, autoRefreshCallback, updateMailboxInfoUI);
 window.togglePin = (e, addr) => toggleMailboxPin(e, addr, api, showToast, loadMailboxes);
@@ -162,7 +191,40 @@ if (els.mbNext) els.mbNext.onclick = () => nextMbPage(loadMailboxes, getLastCoun
 if (els.mbSearch) { let t = null; els.mbSearch.oninput = () => { if (t) clearTimeout(t); t = setTimeout(() => { setSearchTerm(els.mbSearch.value); resetMbPage(); loadMailboxes(); }, 300); };}
 
 // 长度滑块
-if (lenRange && lenVal) { lenRange.value = String(getStoredLength()); lenVal.textContent = String(getStoredLength()); updateRangeProgress(lenRange); lenRange.oninput = () => { lenVal.textContent = lenRange.value; saveLength(Number(lenRange.value)); updateRangeProgress(lenRange); };}
+if (lenRange && lenVal) { lenRange.value = String(getStoredLength()); lenVal.textContent = String(getStoredLength()); updateRangeProgress(lenRange); lenRange.oninput = () => { lenVal.textContent = lenRange.value; saveLength(Number(lenRange.value)); updateRangeProgress(lenRange); }; }
+if (els.subdomainLenRange && els.subdomainLenVal) {
+  els.subdomainLenRange.value = String(getStoredSubdomainLength());
+  els.subdomainLenVal.textContent = String(getStoredSubdomainLength());
+  updateRangeProgress(els.subdomainLenRange);
+  els.subdomainLenRange.oninput = () => {
+    els.subdomainLenVal.textContent = els.subdomainLenRange.value;
+    saveSubdomainLength(Number(els.subdomainLenRange.value));
+    updateRangeProgress(els.subdomainLenRange);
+  };
+}
+if (els.formatVersionV1 && els.formatVersionV2) {
+  const storedVersion = getStoredFormatVersion();
+  els.formatVersionV1.checked = storedVersion === 'v1';
+  els.formatVersionV2.checked = storedVersion !== 'v1';
+  els.formatVersionV1.onchange = els.formatVersionV2.onchange = () => {
+    saveFormatVersion(els.formatVersionV1.checked ? 'v1' : 'v2');
+    updateSubdomainUI();
+  };
+}
+if (els.subdomainModeRandom && els.subdomainModeCustom) {
+  const storedMode = getStoredSubdomainMode();
+  els.subdomainModeRandom.checked = storedMode !== 'custom';
+  els.subdomainModeCustom.checked = storedMode === 'custom';
+  els.subdomainModeRandom.onchange = els.subdomainModeCustom.onchange = () => {
+    saveSubdomainMode(els.subdomainModeCustom.checked ? 'custom' : 'random');
+    updateSubdomainUI();
+  };
+}
+if (els.subdomainCustomInput) {
+  els.subdomainCustomInput.value = getStoredSubdomainCustom();
+  els.subdomainCustomInput.oninput = () => saveSubdomainCustom(els.subdomainCustomInput.value);
+}
+updateSubdomainUI();
 
 // 自定义邮箱
 if (els.toggleCustom) els.toggleCustom.onclick = () => { if (els.customOverlay) { const vis = els.customOverlay.style.display !== 'none'; els.customOverlay.style.display = vis ? 'none' : 'flex'; if (!vis) setTimeout(() => els.customLocalOverlay?.focus(), 50); }};
@@ -172,23 +234,23 @@ if (els.createCustomOverlay) els.createCustomOverlay.onclick = () => createCusto
 if (els.sidebarToggle) { els.sidebarToggle.onclick = () => { els.sidebar?.classList.toggle('collapsed'); els.container?.classList.toggle('sidebar-collapsed'); const c = els.sidebar?.classList.contains('collapsed'); if (els.sidebarToggleIcon) els.sidebarToggleIcon.textContent = c ? '▶' : '◀'; localStorage.setItem('sidebar-collapsed', c ? '1' : '0'); }; if (localStorage.getItem('sidebar-collapsed') === '1') { els.sidebar?.classList.add('collapsed'); els.container?.classList.add('sidebar-collapsed'); if (els.sidebarToggleIcon) els.sidebarToggleIcon.textContent = '▶'; }}
 
 // 转发和收藏
-if (els.forwardSetting) els.forwardSetting.onclick = () => { 
-  const i = getCurrentMailboxInfo(); 
-  if (i && i.id) openForwardDialog(i.id, i.address, i.forward_to); 
-  else showToast('请先选择一个邮箱', 'warn'); 
+if (els.forwardSetting) els.forwardSetting.onclick = () => {
+  const i = getCurrentMailboxInfo();
+  if (i && i.id) openForwardDialog(i.id, i.address, i.forward_to);
+  else showToast('请先选择一个邮箱', 'warn');
 };
-if (els.toggleFavorite) els.toggleFavorite.onclick = async () => { 
-  const i = getCurrentMailboxInfo(); 
-  if (i && i.id) { 
-    try { 
-      const result = await toggleFavorite(i.id); 
+if (els.toggleFavorite) els.toggleFavorite.onclick = async () => {
+  const i = getCurrentMailboxInfo();
+  if (i && i.id) {
+    try {
+      const result = await toggleFavorite(i.id);
       if (result.success) {
         const newInfo = { ...i, is_favorite: result.is_favorite };
-        setCurrentMailboxInfo(newInfo); 
+        setCurrentMailboxInfo(newInfo);
         updateMailboxInfoUI(newInfo);
       }
-    } catch(_) {} 
-  } else showToast('请先选择一个邮箱', 'warn'); 
+    } catch(_) {}
+  } else showToast('请先选择一个邮箱', 'warn');
 };
 
 // 撰写
@@ -198,11 +260,34 @@ initCompose(els, api, showToast);
 (async () => {
   const s = await validateSession();
   if (!s) { clearCurrentMailbox(); stopAutoRefresh(); location.replace('/html/login.html'); return; }
-  if (s.role === 'guest') { initGuestMode(); if (domainSelect) { domainSelect.innerHTML = '<option value="0">example.com</option>'; domainSelect.disabled = true; } populateDomains(['example.com'], domainSelect); }
-  else await loadDomains(domainSelect, api);
+  let mailboxConfig = null;
+  if (s.role === 'guest') {
+    initGuestMode();
+    mailboxConfig = DEFAULT_MAILBOX_CONFIG;
+    if (domainSelect) { domainSelect.innerHTML = '<option value="0">example.com</option>'; domainSelect.disabled = true; }
+    populateDomains(DEFAULT_MAILBOX_CONFIG.domains, domainSelect);
+  }
+  else mailboxConfig = await loadDomains(domainSelect, api);
+  if (mailboxConfig?.addressing) {
+    const settings = mailboxConfig.addressing;
+    if (els.formatVersionV1 && els.formatVersionV2) {
+      const storedVersion = localStorage.getItem(STORAGE_KEYS.formatVersion);
+      const effectiveVersion = storedVersion === 'v1' || storedVersion === 'v2' ? storedVersion : settings.version || 'v2';
+      els.formatVersionV1.checked = effectiveVersion === 'v1';
+      els.formatVersionV2.checked = effectiveVersion !== 'v1';
+    }
+    if (els.subdomainLenRange && els.subdomainLenVal) {
+      const storedLength = localStorage.getItem(STORAGE_KEYS.subdomainLength);
+      const effectiveLength = storedLength ? Number(storedLength) : (settings?.defaults?.subdomainRandomLength || 3);
+      els.subdomainLenRange.value = String(Math.max(3, Math.min(30, effectiveLength || 3)));
+      els.subdomainLenVal.textContent = els.subdomainLenRange.value;
+      updateRangeProgress(els.subdomainLenRange);
+    }
+    updateSubdomainUI();
+  }
   try { const qr = await api('/api/user/quota'); const q = await qr.json(); const el = document.getElementById('quota'); if (el && q) { el.textContent = isAdmin() ? `${q.total || 0} 邮箱` : `${q.used || 0} / ${q.limit || 0}`; }} catch(_) {}
   await loadMailboxes();
-  
+
   // 优先使用 URL 参数中的邮箱，其次使用本地存储的上次邮箱
   const urlParams = new URLSearchParams(window.location.search);
   const urlMailbox = urlParams.get('mailbox');
@@ -211,9 +296,9 @@ initCompose(els, api, showToast);
     // 清除 URL 参数，避免刷新时重复选择
     window.history.replaceState({}, '', window.location.pathname);
   } else {
-    const last = loadCurrentMailbox(); 
+    const last = loadCurrentMailbox();
     if (last) await window.selectMailbox(last);
   }
-  
+
   initVisibilityTracking();
 })();

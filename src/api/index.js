@@ -8,6 +8,7 @@ import { handleMailboxesApi } from './mailboxes.js';
 import { handleEmailsApi } from './emails.js';
 import { handleSendApi } from './send.js';
 import { handleApiKeysApi } from './apiKeys.js';
+import { handleAdminSettingsApi } from './adminSettings.js';
 import { handleExternalApi } from './external.js';
 import { getJwtPayload, errorResponse, isStrictAdmin } from './helpers.js';
 
@@ -44,7 +45,7 @@ export async function handleApiRequest(request, db, mailDomains, options = {
     const mailboxId = payload?.mailboxId;
     
     // 允许的API端点
-    const allowedPaths = ['/api/emails', '/api/email/', '/api/auth', '/api/quota', '/api/mailbox/password'];
+    const allowedPaths = ['/api/emails', '/api/email/', '/api/auth', '/api/quota', '/api/mailbox/password', '/api/mailbox/config', '/api/domains', '/api/generate', '/api/create'];
     const isAllowedPath = allowedPaths.some(allowedPath => path.startsWith(allowedPath));
     
     if (!isAllowedPath) {
@@ -93,6 +94,10 @@ export async function handleApiRequest(request, db, mailDomains, options = {
   response = await handleApiKeysApi(request, db, url, path, { ...options, strictAdmin });
   if (response) return response;
 
+  // 后台设置 API
+  response = await handleAdminSettingsApi(request, db, url, path, { ...options, strictAdmin });
+  if (response) return response;
+
   // 邮箱管理 API
   response = await handleMailboxesApi(request, db, mailDomains, url, path, options);
   if (response) return response;
@@ -113,4 +118,5 @@ export { handleMailboxesApi } from './mailboxes.js';
 export { handleEmailsApi } from './emails.js';
 export { handleSendApi } from './send.js';
 export { handleApiKeysApi } from './apiKeys.js';
+export { handleAdminSettingsApi } from './adminSettings.js';
 export { handleExternalApi } from './external.js';

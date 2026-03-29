@@ -16,7 +16,7 @@ export async function api(path, options = {}) {
   if (window.__GUEST_MODE__) {
     return mockApi(path, options);
   }
-  
+
   const r = await fetch(path, {
     ...options,
     headers: { 'Cache-Control': 'no-cache', ...options.headers }
@@ -142,6 +142,20 @@ export async function revokeApiKey(id) {
   return api(`/api/admin/api-keys/${id}`, { method: 'DELETE' });
 }
 
+export async function getMailboxAddressingSettings() {
+  const r = await api('/api/admin/settings/mailbox-addressing');
+  return r.json();
+}
+
+export async function updateMailboxAddressingSettings(data) {
+  const r = await api('/api/admin/settings/mailbox-addressing', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data)
+  });
+  return r.json();
+}
+
 export default {
   api,
   getUsers,
@@ -154,5 +168,7 @@ export default {
   getApiKeys,
   getApiKeyMeta,
   createApiKey,
-  revokeApiKey
+  revokeApiKey,
+  getMailboxAddressingSettings,
+  updateMailboxAddressingSettings
 };

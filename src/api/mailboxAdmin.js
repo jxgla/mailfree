@@ -6,6 +6,7 @@
 import { getJwtPayload, isStrictAdmin, sha256Hex, errorResponse } from './helpers.js';
 import { invalidateMailboxCache, invalidateSystemStatCache } from '../utils/cache.js';
 import { getMailboxIdByAddress } from '../db/index.js';
+import { splitMailboxAddress } from '../utils/mailboxAddressing.js';
 import {
   handleSetForward,
   handleToggleFavorite,
@@ -190,9 +191,10 @@ export async function handleMailboxAdminApi(request, db, url, path, options) {
             type: 'update'
           });
         } else {
+          const { local, domain } = splitMailboxAddress(normalizedAddress);
           batchStatements.push({
-            stmt: db.prepare('INSERT INTO mailboxes (address, can_login) VALUES (?, ?)')
-              .bind(normalizedAddress, canLogin ? 1 : 0),
+            stmt: db.prepare('INSERT INTO mailboxes (address, local_part, domain, can_login) VALUES (?, ?, ?, ?)')
+              .bind(normalizedAddress, local, domain, canLogin ? 1 : 0),
             address: normalizedAddress,
             type: 'insert'
           });

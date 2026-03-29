@@ -9,10 +9,23 @@ import { isGuest } from './session.js';
 // 域名列表
 let domains = [];
 
+export const DEFAULT_MAILBOX_CONFIG = {
+  domains: ['example.com'],
+  addressing: {
+    version: 'v2',
+    defaults: { localRandomLength: 8, subdomainRandomLength: 3 },
+    limits: { localRandomMin: 8, localRandomMax: 30, subdomainRandomMin: 3, subdomainRandomMax: 30 }
+  }
+};
+
 // 存储键
 export const STORAGE_KEYS = {
   domain: 'mailfree:lastDomain',
-  length: 'mailfree:lastLen'
+  length: 'mailfree:lastLen',
+  formatVersion: 'mailfree:formatVersion',
+  subdomainMode: 'mailfree:subdomainMode',
+  subdomainLength: 'mailfree:subdomainLen',
+  subdomainCustom: 'mailfree:subdomainCustom'
 };
 
 /**
@@ -39,17 +52,25 @@ export function setDomains(list) {
 export function populateDomains(domainList, selectElement) {
   if (!selectElement) return;
   const list = Array.isArray(domainList) ? domainList : [];
-  selectElement.innerHTML = list.map((d, i) => `<option value="${i}">${d}</option>`).join('');
-  
+  selectElement.innerHTML = [
+    '<option value="">随机选择可用域名</option>',
+    ...list.map((d, i) => `<option value="${i}">${d}</option>`)
+  ].join('');
+
   const stored = localStorage.getItem(STORAGE_KEYS.domain) || '';
   const idx = stored ? list.indexOf(stored) : -1;
-  selectElement.selectedIndex = idx >= 0 ? idx : 0;
-  
-  selectElement.addEventListener('change', () => {
+  selectElement.value = idx >= 0 ? String(idx) : '';
+
+  selectElement.onchange = () => {
+    const value = selectElement.value;
+    if (value === '') {
+      localStorage.removeItem(STORAGE_KEYS.domain);
+      return;
+    }
     const opt = selectElement.options[selectElement.selectedIndex];
     if (opt) localStorage.setItem(STORAGE_KEYS.domain, opt.textContent || '');
-  }, { once: true });
-  
+  };
+
   setDomains(list);
 }
 
@@ -60,55 +81,66 @@ export function populateDomains(domainList, selectElement) {
  */
 export async function loadDomains(selectElement, api) {
   if (isGuest()) {
-    populateDomains(['example.com'], selectElement);
-    return;
+    populateDomains(DEFAULT_MAILBOX_CONFIG.domains, selectElement);
+    return DEFAULT_MAILBOX_CONFIG;
   }
-  
-  let domainSet = false;
-  
-  // 尝试从缓存加载
-  try {
-    const cached = cacheGet('domains', 24 * 60 * 60 * 1000);
-    if (Array.isArray(cached) && cached.length) {
-      populateDomains(cached, selectElement);
-      domainSet = true;
-    }
-  } catch(_) {}
-  
-  // 尝试从预取加载
-  try {
-    const prefetched = readPrefetch('mf:prefetch:domains');
-    if (Array.isArray(prefetched) && prefetched.length) {
-      populateDomains(prefetched, selectElement);
-      domainSet = true;
-    }
-  } catch(_) {}
-  
-  // 从 API 加载
+
+  let domainList = null;
+
   try {
     const r = await api('/api/domains');
-    const domainList = await r.json();
-    if (Array.isArray(domainList) && domainList.length) {
-      populateDomains(domainList, selectElement);
-      cacheSet('domains', domainList);
-      domainSet = true;
+    const directDomains = await r.json();
+    if (Array.isArray(directDomains) && directDomains.length) {
+      populateDomains(directDomains, selectElement);
+      domainList = directDomains;
     }
   } catch(_) {}
-  
-  // 降级处理
-  if (!domainSet) {
+
+  if (!domainList) {
+    try {
+      const prefetched = readPrefetch('mf:prefetch:mailbox-config');
+      if (prefetched && Array.isArray(prefetched.domains) && prefetched.domains.length) {
+        populateDomains(prefetched.domains, selectElement);
+        domainList = prefetched.domains;
+      }
+    } catch(_) {}
+  }
+
+  if (!domainList) {
+    try {
+      const cached = cacheGet('mailboxConfig', 24 * 60 * 60 * 1000);
+      if (cached && Array.isArray(cached.domains) && cached.domains.length) {
+        populateDomains(cached.domains, selectElement);
+        domainList = cached.domains;
+      }
+    } catch(_) {}
+  }
+
+  let config = null;
+  try {
+    const r = await api('/api/mailbox/config');
+    const mailboxConfig = await r.json();
+    if (mailboxConfig && mailboxConfig.addressing) {
+      if (!domainList && Array.isArray(mailboxConfig.domains) && mailboxConfig.domains.length) {
+        populateDomains(mailboxConfig.domains, selectElement);
+        domainList = mailboxConfig.domains;
+      }
+      cacheSet('mailboxConfig', mailboxConfig);
+      config = mailboxConfig;
+    }
+  } catch(_) {}
+
+  if (!domainList) {
     const meta = (document.querySelector('meta[name="mail-domains"]')?.getAttribute('content') || '')
       .split(',').map(s => s.trim()).filter(Boolean);
-    const fallback = [];
-    if (window.currentMailbox && window.currentMailbox.includes('@')) {
-      fallback.push(window.currentMailbox.split('@')[1]);
-    }
-    if (!meta.length && location.hostname) {
-      fallback.push(location.hostname);
-    }
-    const list = [...new Set(meta.length ? meta : fallback)].filter(Boolean);
-    populateDomains(list, selectElement);
+    domainList = [...new Set(meta)].filter(Boolean);
+    populateDomains(domainList, selectElement);
   }
+
+  return config || {
+    domains: domainList,
+    addressing: DEFAULT_MAILBOX_CONFIG.addressing
+  };
 }
 
 /**
@@ -118,6 +150,53 @@ export async function loadDomains(selectElement, api) {
 export function getStoredLength() {
   const stored = Number(localStorage.getItem(STORAGE_KEYS.length) || '8');
   return Math.max(8, Math.min(30, isNaN(stored) ? 8 : stored));
+}
+
+export function getStoredFormatVersion() {
+  const stored = localStorage.getItem(STORAGE_KEYS.formatVersion) || 'v2';
+  return stored === 'v1' ? 'v1' : 'v2';
+}
+
+export function saveFormatVersion(version) {
+  const next = version === 'v1' ? 'v1' : 'v2';
+  if (localStorage.getItem(STORAGE_KEYS.formatVersion) !== next) {
+    localStorage.setItem(STORAGE_KEYS.formatVersion, next);
+  }
+}
+
+export function getStoredSubdomainMode() {
+  const stored = localStorage.getItem(STORAGE_KEYS.subdomainMode) || 'random';
+  return stored === 'custom' ? 'custom' : 'random';
+}
+
+export function saveSubdomainMode(mode) {
+  const next = mode === 'custom' ? 'custom' : 'random';
+  if (localStorage.getItem(STORAGE_KEYS.subdomainMode) !== next) {
+    localStorage.setItem(STORAGE_KEYS.subdomainMode, next);
+  }
+}
+
+export function getStoredSubdomainLength() {
+  const stored = Number(localStorage.getItem(STORAGE_KEYS.subdomainLength) || '3');
+  return Math.max(3, Math.min(30, isNaN(stored) ? 3 : stored));
+}
+
+export function saveSubdomainLength(length) {
+  const clamped = Math.max(3, Math.min(30, isNaN(length) ? 3 : Number(length)));
+  if (localStorage.getItem(STORAGE_KEYS.subdomainLength) !== String(clamped)) {
+    localStorage.setItem(STORAGE_KEYS.subdomainLength, String(clamped));
+  }
+}
+
+export function getStoredSubdomainCustom() {
+  return (localStorage.getItem(STORAGE_KEYS.subdomainCustom) || '').trim().toLowerCase();
+}
+
+export function saveSubdomainCustom(value) {
+  const next = String(value || '').trim().toLowerCase();
+  if (localStorage.getItem(STORAGE_KEYS.subdomainCustom) !== next) {
+    localStorage.setItem(STORAGE_KEYS.subdomainCustom, next);
+  }
 }
 
 /**
@@ -157,6 +236,14 @@ export default {
   populateDomains,
   loadDomains,
   getStoredLength,
+  getStoredFormatVersion,
+  saveFormatVersion,
+  getStoredSubdomainMode,
+  saveSubdomainMode,
+  getStoredSubdomainLength,
+  saveSubdomainLength,
+  getStoredSubdomainCustom,
+  saveSubdomainCustom,
   saveLength,
   getSelectedDomainIndex,
   updateRangeProgress,

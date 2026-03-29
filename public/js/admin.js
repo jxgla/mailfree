@@ -3,7 +3,7 @@
  * @module admin
  */
 
-import { api, getUsers, createUser, updateUser, deleteUser, getUserMailboxes, assignMailbox, unassignMailbox, getApiKeys, getApiKeyMeta, createApiKey, revokeApiKey } from './modules/admin/api.js';
+import { api, getUsers, createUser, updateUser, deleteUser, getUserMailboxes, assignMailbox, unassignMailbox, getApiKeys, getApiKeyMeta, createApiKey, revokeApiKey, getMailboxAddressingSettings, updateMailboxAddressingSettings } from './modules/admin/api.js';
 import { formatTime, renderUserRow, renderUserList, generateSkeletonRows, renderPagination } from './modules/admin/user-list.js';
 import { fillEditForm, collectEditFormData, validateEditForm, resetEditState } from './modules/admin/user-edit.js';
 
@@ -16,6 +16,8 @@ let currentViewingUser = null;
 let mailboxPage = 1, mailboxPageSize = 20, totalMailboxes = 0;
 let apiKeyScopes = [];
 let apiKeys = [];
+let mailboxAddressingSettings = null;
+let sessionInfo = null;
 
 // DOM 元素
 const els = {
@@ -30,7 +32,7 @@ const els = {
   pageInfo: document.getElementById('page-info'),
   prevPage: document.getElementById('prev-page'),
   nextPage: document.getElementById('next-page'),
-  
+
   uOpen: document.getElementById('u-open'),
   uModal: document.getElementById('u-modal'),
   uClose: document.getElementById('u-close'),
@@ -39,7 +41,7 @@ const els = {
   uName: document.getElementById('u-name'),
   uPass: document.getElementById('u-pass'),
   uRole: document.getElementById('u-role'),
-  
+
   aOpen: document.getElementById('a-open'),
   aModal: document.getElementById('a-modal'),
   aClose: document.getElementById('a-close'),
@@ -47,7 +49,7 @@ const els = {
   aAssign: document.getElementById('a-assign'),
   aName: document.getElementById('a-name'),
   aMail: document.getElementById('a-mail'),
-  
+
   // 取消分配模态框
   unassignOpen: document.getElementById('unassign-open'),
   unassignModal: document.getElementById('unassign-modal'),
@@ -56,7 +58,7 @@ const els = {
   unassignSubmit: document.getElementById('unassign-submit'),
   unassignName: document.getElementById('unassign-name'),
   unassignMail: document.getElementById('unassign-mail'),
-  
+
   editModal: document.getElementById('edit-modal'),
   editClose: document.getElementById('edit-close'),
   editCancel: document.getElementById('edit-cancel'),
@@ -69,7 +71,7 @@ const els = {
   editSendCheck: document.getElementById('edit-send-check'),
   editPass: document.getElementById('edit-pass'),
   editDelete: document.getElementById('edit-delete'),
-  
+
   userMailboxes: document.getElementById('user-mailboxes'),
   userMailboxesLoading: document.getElementById('user-mailboxes-loading'),
   mailboxesCount: document.getElementById('mailboxes-count'),
@@ -96,6 +98,12 @@ const els = {
   apiKeyResultOk: document.getElementById('api-key-result-ok'),
   apiKeyValue: document.getElementById('api-key-value'),
   apiKeyCopy: document.getElementById('api-key-copy'),
+  mailboxSettingsCard: document.getElementById('mailbox-settings-card'),
+  mailboxFormatV1: document.getElementById('mailbox-format-v1'),
+  mailboxFormatV2: document.getElementById('mailbox-format-v2'),
+  mailboxSubLen: document.getElementById('mailbox-sub-len'),
+  mailboxSettingsSave: document.getElementById('mailbox-settings-save'),
+  mailboxSettingsStatus: document.getElementById('mailbox-settings-status'),
   confirmModal: document.getElementById('admin-confirm-modal'),
   confirmMessage: document.getElementById('admin-confirm-message'),
   confirmClose: document.getElementById('admin-confirm-close'),
@@ -141,6 +149,18 @@ function formatApiKeyTime(value) {
   return date.toLocaleString('zh-CN', { hour12: false });
 }
 
+async function loadSessionInfo() {
+  try {
+    const res = await api('/api/session');
+    if (!res.ok) return null;
+    sessionInfo = await res.json();
+    return sessionInfo;
+  } catch (_) {
+    sessionInfo = null;
+    return null;
+  }
+}
+
 function renderApiKeyScopes() {
   if (!els.apiKeyScopes) return;
   els.apiKeyScopes.innerHTML = apiKeyScopes.map(scope => `
@@ -149,6 +169,55 @@ function renderApiKeyScopes() {
       <span>${scope}</span>
     </label>
   `).join('');
+}
+
+function renderMailboxAddressingSettings() {
+  const settings = mailboxAddressingSettings || { version: 'v2', defaults: { subdomainRandomLength: 3 } };
+  if (els.mailboxFormatV1 && els.mailboxFormatV2) {
+    els.mailboxFormatV1.checked = settings.version === 'v1';
+    els.mailboxFormatV2.checked = settings.version !== 'v1';
+  }
+  if (els.mailboxSubLen) {
+    els.mailboxSubLen.value = String(settings?.defaults?.subdomainRandomLength || 3);
+  }
+  if (els.mailboxSettingsStatus) {
+    els.mailboxSettingsStatus.textContent = settings.version === 'v1'
+      ? '当前默认：原版 xxx@域名'
+      : `当前默认：新版 xxx@yyy.域名（yyy 默认 ${settings?.defaults?.subdomainRandomLength || 3} 位）`;
+  }
+}
+
+async function loadMailboxAddressingSettings() {
+  if (sessionInfo?.role !== 'admin') {
+    if (els.mailboxSettingsCard) els.mailboxSettingsCard.style.display = 'none';
+    return;
+  }
+  if (els.mailboxSettingsCard) els.mailboxSettingsCard.style.display = '';
+  try {
+    mailboxAddressingSettings = await getMailboxAddressingSettings();
+    renderMailboxAddressingSettings();
+  } catch (error) {
+    console.error('加载邮箱格式设置失败:', error);
+    if (els.mailboxSettingsCard) els.mailboxSettingsCard.style.display = 'none';
+  }
+}
+
+async function saveMailboxAddressingSettings() {
+  if (sessionInfo?.role !== 'admin') return;
+  try {
+    const version = els.mailboxFormatV1?.checked ? 'v1' : 'v2';
+    const subdomainRandomLength = Math.max(3, Math.min(30, Number(els.mailboxSubLen?.value || 3)));
+    mailboxAddressingSettings = await updateMailboxAddressingSettings({
+      version,
+      defaults: {
+        subdomainRandomLength
+      }
+    });
+    renderMailboxAddressingSettings();
+    showToast('邮箱格式设置已保存', 'success');
+  } catch (error) {
+    showToast('保存邮箱格式设置失败', 'error');
+  }
 }
 
 function getSelectedApiKeyScopes() {
@@ -250,16 +319,16 @@ async function handleCreateApiKey() {
 async function loadUsers() {
   if (els.usersLoading) els.usersLoading.style.display = 'flex';
   if (els.usersTbody) els.usersTbody.innerHTML = generateSkeletonRows(5);
-  
+
   try {
     const data = await getUsers({ page: currentPage, size: pageSize });
     const users = Array.isArray(data) ? data : (data.list || []);
     totalUsers = data.total || users.length;
-    
+
     renderUserList(users, els.usersTbody);
     updatePagination();
     if (els.usersCount) els.usersCount.textContent = totalUsers;
-    
+
     bindUserEvents();
   } catch (e) {
     console.error('加载用户失败:', e);
@@ -279,23 +348,19 @@ function updatePagination() {
 
 // 绑定用户操作事件
 function bindUserEvents() {
-  // 点击整行加载邮箱列表
   els.usersTbody?.querySelectorAll('.user-row.clickable').forEach(row => {
     row.onclick = async (e) => {
-      // 如果点击的是按钮，不触发行点击
       if (e.target.closest('[data-action]')) return;
-      
+
       const userId = row.dataset.userId;
       if (userId) {
-        // 移除其他行的选中状态
         els.usersTbody.querySelectorAll('.user-row').forEach(r => r.classList.remove('active'));
         row.classList.add('active');
         await openMailboxesPanel(userId);
       }
     };
   });
-  
-  // 编辑按钮事件
+
   els.usersTbody?.querySelectorAll('[data-action="edit"]').forEach(btn => {
     btn.onclick = async (e) => {
       e.stopPropagation();
@@ -305,14 +370,13 @@ function bindUserEvents() {
   });
 }
 
-// 打开编辑模态框
 async function openEditModal(userId) {
   try {
     const data = await getUsers({ page: 1, size: 100 });
     const users = Array.isArray(data) ? data : (data.list || []);
     const user = users.find(u => u.id == userId);
     if (!user) { showToast('用户不存在', 'error'); return; }
-    
+
     currentViewingUser = user;
     fillEditForm(els, user);
     els.editModal?.classList.add('show');
@@ -321,17 +385,16 @@ async function openEditModal(userId) {
   }
 }
 
-// 保存用户编辑
 async function saveEdit() {
   if (!currentViewingUser) return;
-  
+
   const formData = collectEditFormData(els);
   const validation = validateEditForm(formData, false);
   if (!validation.valid) {
     showToast(validation.error, 'error');
     return;
   }
-  
+
   try {
     await updateUser(currentViewingUser.id, formData);
     showToast('保存成功', 'success');
@@ -342,19 +405,17 @@ async function saveEdit() {
   }
 }
 
-// 打开邮箱面板
 async function openMailboxesPanel(userId) {
   try {
     const data = await getUsers({ page: 1, size: 100 });
     const users = Array.isArray(data) ? data : (data.list || []);
     const user = users.find(u => u.id == userId);
     if (!user) { showToast('用户不存在', 'error'); return; }
-    
+
     currentViewingUser = user;
     mailboxPage = 1;
     await loadUserMailboxes();
-    
-    // 显示邮箱面板
+
     if (els.userMailboxes) els.userMailboxes.style.display = 'block';
     if (els.aName) els.aName.value = user.username;
   } catch(e) {
@@ -362,19 +423,17 @@ async function openMailboxesPanel(userId) {
   }
 }
 
-// 加载用户邮箱
 async function loadUserMailboxes() {
   if (!currentViewingUser) return;
   if (els.userMailboxesLoading) els.userMailboxesLoading.style.display = 'flex';
-  
+
   try {
     const data = await getUserMailboxes(currentViewingUser.id, { page: mailboxPage, size: mailboxPageSize });
     const list = Array.isArray(data) ? data : (data.list || []);
     totalMailboxes = data.total || list.length;
-    
+
     if (els.mailboxesCount) els.mailboxesCount.textContent = totalMailboxes;
-    
-    // 渲染邮箱列表
+
     const container = els.userMailboxes?.querySelector('.mailbox-list');
     if (container) {
       container.innerHTML = list.length ? list.map(m => `
@@ -383,27 +442,24 @@ async function loadUserMailboxes() {
           <button class="btn btn-sm danger" data-action="unassign">取消分配</button>
         </div>
       `).join('') : '<div class="empty">暂无邮箱</div>';
-      
-      // 绑定整行点击事件
+
       container.querySelectorAll('.mailbox-item.clickable').forEach(item => {
         item.onclick = (e) => {
-          // 如果点击的是按钮，不跳转
           if (e.target.closest('[data-action]')) return;
           const href = item.dataset.href;
           if (href) location.href = href;
         };
       });
-      
-      // 绑定取消分配事件
+
       container.querySelectorAll('[data-action="unassign"]').forEach(btn => {
         btn.onclick = async (e) => {
           e.stopPropagation();
           const address = btn.closest('[data-address]')?.dataset.address;
           if (!address) return;
-          
+
           const confirmed = await showConfirm(`确定取消分配邮箱 ${address}？`);
           if (!confirmed) return;
-          
+
           try {
             await unassignMailbox(currentViewingUser.username, address);
             showToast('已取消分配', 'success');
@@ -412,8 +468,7 @@ async function loadUserMailboxes() {
         };
       });
     }
-    
-    // 更新分页
+
     const totalPages = Math.max(1, Math.ceil(totalMailboxes / mailboxPageSize));
     if (els.mailboxesPageInfo) els.mailboxesPageInfo.textContent = `${mailboxPage} / ${totalPages}`;
     if (els.mailboxesPrevPage) els.mailboxesPrevPage.disabled = mailboxPage <= 1;
@@ -425,17 +480,16 @@ async function loadUserMailboxes() {
   }
 }
 
-// 创建用户
 async function handleCreateUser() {
   const username = els.uName?.value.trim();
   const password = els.uPass?.value.trim();
   const role = els.uRole?.value || 'user';
-  
+
   if (!username || !password) {
     showToast('用户名和密码不能为空', 'error');
     return;
   }
-  
+
   try {
     await createUser({ username, password, role });
     showToast('用户创建成功', 'success');
@@ -448,28 +502,26 @@ async function handleCreateUser() {
   }
 }
 
-// 分配邮箱
 async function handleAssignMailbox() {
   const username = els.aName?.value.trim();
   const addressText = els.aMail?.value.trim();
-  
+
   if (!username) {
     showToast('请输入用户名', 'error');
     return;
   }
-  
+
   if (!addressText) {
     showToast('请输入邮箱地址', 'error');
     return;
   }
-  
-  // 支持批量分配（每行一个地址）
+
   const addresses = addressText.split('\n').map(a => a.trim()).filter(a => a);
   if (addresses.length === 0) {
     showToast('请输入有效的邮箱地址', 'error');
     return;
   }
-  
+
   try {
     let successCount = 0;
     let failCount = 0;
@@ -481,7 +533,7 @@ async function handleAssignMailbox() {
         failCount++;
       }
     }
-    
+
     if (successCount > 0 && failCount === 0) {
       showToast(`成功分配 ${successCount} 个邮箱`, 'success');
     } else if (successCount > 0 && failCount > 0) {
@@ -489,12 +541,11 @@ async function handleAssignMailbox() {
     } else {
       showToast('分配失败', 'error');
     }
-    
+
     els.aModal?.classList.remove('show');
     els.aMail.value = '';
     els.aName.value = '';
-    
-    // 如果当前有查看的用户且用户名匹配，刷新邮箱列表
+
     if (currentViewingUser && currentViewingUser.username === username) {
       loadUserMailboxes();
     }
@@ -503,28 +554,26 @@ async function handleAssignMailbox() {
   }
 }
 
-// 取消分配邮箱
 async function handleUnassignMailbox() {
   const username = els.unassignName?.value.trim();
   const addressText = els.unassignMail?.value.trim();
-  
+
   if (!username) {
     showToast('请输入用户名', 'error');
     return;
   }
-  
+
   if (!addressText) {
     showToast('请输入邮箱地址', 'error');
     return;
   }
-  
-  // 支持批量取消分配（每行一个地址）
+
   const addresses = addressText.split('\n').map(a => a.trim()).filter(a => a);
   if (addresses.length === 0) {
     showToast('请输入有效的邮箱地址', 'error');
     return;
   }
-  
+
   try {
     let successCount = 0;
     let failCount = 0;
@@ -536,7 +585,7 @@ async function handleUnassignMailbox() {
         failCount++;
       }
     }
-    
+
     if (successCount > 0 && failCount === 0) {
       showToast(`成功取消分配 ${successCount} 个邮箱`, 'success');
     } else if (successCount > 0 && failCount > 0) {
@@ -544,12 +593,11 @@ async function handleUnassignMailbox() {
     } else {
       showToast('取消分配失败', 'error');
     }
-    
+
     els.unassignModal?.classList.remove('show');
     els.unassignMail.value = '';
     els.unassignName.value = '';
-    
-    // 如果当前有查看的用户且用户名匹配，刷新邮箱列表
+
     if (currentViewingUser && currentViewingUser.username === username) {
       loadUserMailboxes();
     }
@@ -565,13 +613,52 @@ els.usersRefresh?.addEventListener('click', loadUsers);
 els.prevPage?.addEventListener('click', () => { if (currentPage > 1) { currentPage--; loadUsers(); }});
 els.nextPage?.addEventListener('click', () => { const totalPages = Math.ceil(totalUsers / pageSize); if (currentPage < totalPages) { currentPage++; loadUsers(); }});
 
-// 创建用户模态框
 els.uOpen?.addEventListener('click', () => els.uModal?.classList.add('show'));
 els.uClose?.addEventListener('click', () => els.uModal?.classList.remove('show'));
 els.uCancel?.addEventListener('click', () => els.uModal?.classList.remove('show'));
 els.uCreate?.addEventListener('click', handleCreateUser);
 
-// API Key 管理
+els.aOpen?.addEventListener('click', () => els.aModal?.classList.add('show'));
+els.aClose?.addEventListener('click', () => els.aModal?.classList.remove('show'));
+els.aCancel?.addEventListener('click', () => els.aModal?.classList.remove('show'));
+els.aAssign?.addEventListener('click', handleAssignMailbox);
+
+els.unassignOpen?.addEventListener('click', () => els.unassignModal?.classList.add('show'));
+els.unassignClose?.addEventListener('click', () => els.unassignModal?.classList.remove('show'));
+els.unassignCancel?.addEventListener('click', () => els.unassignModal?.classList.remove('show'));
+els.unassignSubmit?.addEventListener('click', handleUnassignMailbox);
+
+els.editClose?.addEventListener('click', () => els.editModal?.classList.remove('show'));
+els.editCancel?.addEventListener('click', () => els.editModal?.classList.remove('show'));
+els.editSave?.addEventListener('click', saveEdit);
+els.editDelete?.addEventListener('click', async () => {
+  if (!currentViewingUser) return;
+  const confirmed = await showConfirm(`确定删除用户 ${currentViewingUser.username}？`);
+  if (!confirmed) return;
+  try {
+    await deleteUser(currentViewingUser.id);
+    showToast('删除成功', 'success');
+    els.editModal?.classList.remove('show');
+    loadUsers();
+  } catch (_) {
+    showToast('删除失败', 'error');
+  }
+});
+
+els.mailboxesPrevPage?.addEventListener('click', () => {
+  if (mailboxPage > 1) {
+    mailboxPage--;
+    loadUserMailboxes();
+  }
+});
+els.mailboxesNextPage?.addEventListener('click', () => {
+  const totalPages = Math.ceil(totalMailboxes / mailboxPageSize);
+  if (mailboxPage < totalPages) {
+    mailboxPage++;
+    loadUserMailboxes();
+  }
+});
+
 els.apiKeysRefresh?.addEventListener('click', loadApiKeys);
 els.apiKeyCreateOpen?.addEventListener('click', () => els.apiKeyCreateModal?.classList.add('show'));
 els.apiKeyCreateClose?.addEventListener('click', () => els.apiKeyCreateModal?.classList.remove('show'));
@@ -582,46 +669,18 @@ els.apiKeyResultOk?.addEventListener('click', () => els.apiKeyResultModal?.class
 els.apiKeyCopy?.addEventListener('click', async () => {
   try {
     await navigator.clipboard.writeText(els.apiKeyValue?.value || '');
-    showToast('API Key 已复制', 'success');
+    showToast('已复制 API Key', 'success');
   } catch (_) {
-    showToast('复制失败，请手动复制', 'warning');
+    showToast('复制失败', 'error');
   }
 });
+els.mailboxSettingsSave?.addEventListener('click', saveMailboxAddressingSettings);
 
-// 分配邮箱模态框
-els.aOpen?.addEventListener('click', () => els.aModal?.classList.add('show'));
-els.aClose?.addEventListener('click', () => els.aModal?.classList.remove('show'));
-els.aCancel?.addEventListener('click', () => els.aModal?.classList.remove('show'));
-els.aAssign?.addEventListener('click', handleAssignMailbox);
-
-// 取消分配模态框
-els.unassignOpen?.addEventListener('click', () => els.unassignModal?.classList.add('show'));
-els.unassignClose?.addEventListener('click', () => els.unassignModal?.classList.remove('show'));
-els.unassignCancel?.addEventListener('click', () => els.unassignModal?.classList.remove('show'));
-els.unassignSubmit?.addEventListener('click', handleUnassignMailbox);
-
-// 编辑模态框
-els.editClose?.addEventListener('click', () => els.editModal?.classList.remove('show'));
-els.editCancel?.addEventListener('click', () => els.editModal?.classList.remove('show'));
-els.editSave?.addEventListener('click', saveEdit);
-els.editDelete?.addEventListener('click', async () => {
-  if (!currentViewingUser) return;
-  
-  const confirmed = await showConfirm(`确定删除用户 "${currentViewingUser.username}" 吗？此操作不可恢复。`);
-  if (!confirmed) return;
-  
-  try {
-    await deleteUser(currentViewingUser.id);
-    showToast('用户已删除', 'success');
-    els.editModal?.classList.remove('show');
-    loadUsers();
-  } catch(e) { showToast('删除失败', 'error'); }
-});
-
-// 邮箱分页
-els.mailboxesPrevPage?.addEventListener('click', () => { if (mailboxPage > 1) { mailboxPage--; loadUserMailboxes(); }});
-els.mailboxesNextPage?.addEventListener('click', () => { const totalPages = Math.ceil(totalMailboxes / mailboxPageSize); if (mailboxPage < totalPages) { mailboxPage++; loadUserMailboxes(); }});
-
-// 初始化
-loadUsers();
-loadApiKeys();
+(async function init() {
+  await loadSessionInfo();
+  await Promise.all([
+    loadUsers(),
+    loadApiKeys(),
+    loadMailboxAddressingSettings()
+  ]);
+})();

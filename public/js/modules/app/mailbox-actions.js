@@ -6,10 +6,66 @@
 import { setCurrentMailbox, getCurrentMailbox, clearCurrentMailbox, setCurrentMailboxInfo } from './mailbox-state.js';
 import { setButtonLoading, restoreButton } from './ui-helpers.js';
 import { generateRandomId } from './random-name.js';
-import { getStoredLength, saveLength, getSelectedDomainIndex } from './domains.js';
+import {
+  getStoredLength,
+  saveLength,
+  getSelectedDomainIndex,
+  getStoredFormatVersion,
+  getStoredSubdomainMode,
+  getStoredSubdomainLength,
+  getStoredSubdomainCustom
+} from './domains.js';
 import { startAutoRefresh, stopAutoRefresh } from './auto-refresh.js';
 import { resetPager } from './email-list.js';
 import { resetMbPage } from './mailbox-list.js';
+
+function readMailboxFormatOptions(elements, domainSelect) {
+  const formatVersion = elements.formatVersionV1?.checked ? 'v1' : getStoredFormatVersion();
+  const subdomainMode = elements.subdomainModeCustom?.checked ? 'custom' : getStoredSubdomainMode();
+  const subdomainLength = Number(elements.subdomainLenRange?.value || getStoredSubdomainLength());
+  const subdomain = (elements.subdomainCustomInput?.value || getStoredSubdomainCustom()).trim().toLowerCase();
+  return {
+    domainIndex: getSelectedDomainIndex(domainSelect),
+    formatVersion,
+    subdomainMode,
+    subdomainLength,
+    subdomain
+  };
+}
+
+function appendMailboxFormatParams(params, format) {
+  params.set('formatVersion', format.formatVersion);
+  if (format.formatVersion === 'v2') {
+    params.set('subdomainMode', format.subdomainMode);
+    if (format.subdomainMode === 'custom' && format.subdomain) {
+      params.set('subdomain', format.subdomain);
+    } else {
+      params.set('subdomainLength', String(format.subdomainLength));
+    }
+  }
+  return params;
+}
+
+function buildCreatePayload(local, format) {
+  const payload = {
+    local,
+    domainIndex: format.domainIndex,
+    formatVersion: format.formatVersion
+  };
+  if (format.formatVersion === 'v2') {
+    payload.subdomainMode = format.subdomainMode;
+    if (format.subdomainMode === 'custom') {
+      payload.subdomain = format.subdomain;
+    } else {
+      payload.subdomainLength = format.subdomainLength;
+    }
+  }
+  return payload;
+}
+
+function buildMailboxRequest(local, elements, domainSelect) {
+  return buildCreatePayload(local, readMailboxFormatOptions(elements, domainSelect));
+}
 
 /**
  * 生成随机邮箱
@@ -23,23 +79,25 @@ import { resetMbPage } from './mailbox-list.js';
  * @param {Function} autoRefreshCallback - 自动刷新回调
  */
 export async function generateMailbox(elements, lenRange, domainSelect, api, showToast, refresh, loadMailboxes, autoRefreshCallback, updateMailboxInfoUI) {
-  const { gen, email, emailActions, listCard } = elements;
-  
+  const { gen } = elements;
+
   try {
     setButtonLoading(gen, '生成中…');
     const len = Number(lenRange?.value || getStoredLength());
-    const domainIndex = getSelectedDomainIndex(domainSelect);
-    
-    const r = await api(`/api/generate?length=${len}&domainIndex=${domainIndex}`);
+    const params = appendMailboxFormatParams(new URLSearchParams({
+      length: String(len),
+      domainIndex: String(getSelectedDomainIndex(domainSelect))
+    }), readMailboxFormatOptions(elements, domainSelect));
+
+    const r = await api(`/api/generate?${params.toString()}`);
     if (!r.ok) throw new Error(await r.text());
-    
+
     const data = await r.json();
     saveLength(len);
-    
+
     setCurrentMailbox(data.email);
     updateEmailDisplay(elements, data.email);
-    
-    // 获取完整的邮箱信息（包括 id、is_favorite 等）
+
     try {
       const infoRes = await api(`/api/mailbox/info?address=${encodeURIComponent(data.email)}`);
       if (infoRes.ok) {
@@ -48,11 +106,11 @@ export async function generateMailbox(elements, lenRange, domainSelect, api, sho
         if (updateMailboxInfoUI) updateMailboxInfoUI(info);
       }
     } catch(_) {}
-    
+
     showToast('邮箱生成成功！', 'success');
     startAutoRefresh(autoRefreshCallback);
     await refresh();
-    
+
     resetMbPage();
     await loadMailboxes({ forceFresh: true });
   } catch(e) {
@@ -75,27 +133,25 @@ export async function generateMailbox(elements, lenRange, domainSelect, api, sho
  */
 export async function generateNameMailbox(elements, lenRange, domainSelect, api, showToast, refresh, loadMailboxes, autoRefreshCallback, updateMailboxInfoUI) {
   const { genName } = elements;
-  
+
   try {
     setButtonLoading(genName, '生成中…');
     const len = Number(lenRange?.value || getStoredLength());
-    const domainIndex = getSelectedDomainIndex(domainSelect);
     const localName = generateRandomId(len);
-    
+
     const r = await api('/api/create', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ local: localName, domainIndex })
+      body: JSON.stringify(buildMailboxRequest(localName, elements, domainSelect))
     });
-    
+
     if (!r.ok) throw new Error(await r.text());
     const data = await r.json();
     saveLength(len);
-    
+
     setCurrentMailbox(data.email);
     updateEmailDisplay(elements, data.email);
-    
-    // 获取完整的邮箱信息（包括 id、is_favorite 等）
+
     try {
       const infoRes = await api(`/api/mailbox/info?address=${encodeURIComponent(data.email)}`);
       if (infoRes.ok) {
@@ -104,11 +160,11 @@ export async function generateNameMailbox(elements, lenRange, domainSelect, api,
         if (updateMailboxInfoUI) updateMailboxInfoUI(info);
       }
     } catch(_) {}
-    
+
     showToast('随机人名邮箱生成成功！', 'success');
     startAutoRefresh(autoRefreshCallback);
     await refresh();
-    
+
     resetMbPage();
     await loadMailboxes({ forceFresh: true });
   } catch(e) {
@@ -128,28 +184,26 @@ export async function generateNameMailbox(elements, lenRange, domainSelect, api,
  */
 export async function createCustomMailbox(elements, domainSelect, api, showToast, loadMailboxes) {
   const { customLocalOverlay, customOverlay } = elements;
-  
+
   try {
     const local = (customLocalOverlay?.value || '').trim();
     if (!/^[A-Za-z0-9._-]{1,64}$/.test(local)) {
       showToast('用户名不合法，仅限字母/数字/._-', 'warn');
       return;
     }
-    const domainIndex = getSelectedDomainIndex(domainSelect);
-    
     const r = await api('/api/create', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ local, domainIndex })
+      body: JSON.stringify(buildMailboxRequest(local, elements, domainSelect))
     });
-    
+
     if (!r.ok) throw new Error(await r.text());
     const data = await r.json();
-    
+
     setCurrentMailbox(data.email);
     updateEmailDisplay(elements, data.email);
     if (customOverlay) customOverlay.style.display = 'none';
-    
+
     showToast('已创建邮箱：' + data.email, 'success');
     await loadMailboxes({ forceFresh: true });
   } catch(e) {
@@ -167,7 +221,7 @@ export function updateEmailDisplay(elements, address) {
   const emailText = document.getElementById('email-text');
   if (emailText) emailText.textContent = address;
   else if (email) email.textContent = address;
-  
+
   email?.classList.add('has-email');
   if (emailActions) emailActions.style.display = 'flex';
   if (listCard) listCard.style.display = 'block';
@@ -185,12 +239,12 @@ export function updateEmailDisplay(elements, address) {
 export async function selectMailboxAddress(address, elements, api, refresh, autoRefreshCallback, updateMailboxInfoUI) {
   setCurrentMailbox(address);
   updateEmailDisplay(elements, address);
-  
+
   // 更新侧边栏选中状态
   document.querySelectorAll('.mailbox-item').forEach(el => {
     el.classList.toggle('active', el.querySelector('.address')?.textContent === address);
   });
-  
+
   // 加载邮箱信息
   try {
     const r = await api(`/api/mailbox/info?address=${encodeURIComponent(address)}`);
@@ -200,7 +254,7 @@ export async function selectMailboxAddress(address, elements, api, refresh, auto
       updateMailboxInfoUI(info);
     }
   } catch(_) {}
-  
+
   // 重置分页并刷新
   resetPager(elements);
   startAutoRefresh(autoRefreshCallback);
@@ -242,7 +296,7 @@ export async function deleteMailboxAddress(event, address, elements, api, showTo
   event.stopPropagation();
   const confirmed = await showConfirm(`确定删除邮箱 ${address}？所有邮件将被清空。`);
   if (!confirmed) return;
-  
+
   try {
     const r = await api(`/api/mailboxes?address=${encodeURIComponent(address)}`, { method: 'DELETE' });
     if (r.ok) {
@@ -262,81 +316,24 @@ export async function deleteMailboxAddress(event, address, elements, api, showTo
   }
 }
 
-/**
- * 复制邮箱地址
- * @param {Function} showToast - 提示函数
- */
-export async function copyMailboxAddress(showToast) {
-  const mailbox = getCurrentMailbox();
-  if (!mailbox) {
-    showToast('请先生成或选择一个邮箱', 'warn');
-    return;
-  }
-  try {
-    await navigator.clipboard.writeText(mailbox);
-    showToast(`已复制：${mailbox}`, 'success');
-  } catch(_) {
-    showToast('复制失败', 'error');
-  }
+export function copyMailboxAddress(showToast) {
+  const emailText = document.getElementById('email-text');
+  const text = emailText?.textContent?.trim() || '';
+  if (!text || text.includes('点击右侧生成按钮')) return;
+  navigator.clipboard.writeText(text).then(() => showToast('邮箱已复制', 'success')).catch(() => showToast('复制失败', 'error'));
 }
 
-/**
- * 清空邮件
- * @param {Function} api - API 函数
- * @param {Function} showToast - 提示函数
- * @param {Function} showConfirm - 确认函数
- * @param {Function} refresh - 刷新函数
- */
 export async function clearAllEmails(api, showToast, showConfirm, refresh) {
-  const mailbox = getCurrentMailbox();
-  if (!mailbox) {
-    showToast('请先选择一个邮箱', 'warn');
-    return;
-  }
-  const confirmed = await showConfirm(`确定清空 ${mailbox} 的所有邮件？`);
+  const currentMailbox = getCurrentMailbox();
+  if (!currentMailbox) return;
+  const confirmed = await showConfirm('确定清空当前邮箱的所有邮件吗？');
   if (!confirmed) return;
-  
   try {
-    const r = await api(`/api/emails?mailbox=${encodeURIComponent(mailbox)}`, { method: 'DELETE' });
-    if (r.ok) {
-      showToast('邮件已清空', 'success');
-      await refresh();
-    }
-  } catch(e) {
+    const r = await api(`/api/emails?mailbox=${encodeURIComponent(currentMailbox)}`, { method: 'DELETE' });
+    if (!r.ok) throw new Error(await r.text());
+    showToast('邮件已清空', 'success');
+    await refresh();
+  } catch (e) {
     showToast(e.message || '清空失败', 'error');
   }
 }
-
-/**
- * 登出
- * @param {Function} api - API 函数
- */
-export async function logout(api) {
-  try {
-    await api('/api/logout', { method: 'POST' });
-  } catch(_) {}
-  
-  try {
-    clearCurrentMailbox();
-  } catch(_) {}
-  
-  try {
-    stopAutoRefresh();
-  } catch(_) {}
-  
-  // 确保跳转一定执行
-  window.location.replace('/html/login.html');
-}
-
-export default {
-  generateMailbox,
-  generateNameMailbox,
-  createCustomMailbox,
-  updateEmailDisplay,
-  selectMailboxAddress,
-  toggleMailboxPin,
-  deleteMailboxAddress,
-  copyMailboxAddress,
-  clearAllEmails,
-  logout
-};

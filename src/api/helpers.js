@@ -44,6 +44,11 @@ export function isStrictAdmin(request, options = {}) {
   return true;
 }
 
+export function isAdminUser(request, options = {}) {
+  const p = getJwtPayload(request, options);
+  return !!p && p.role === 'admin';
+}
+
 /**
  * 创建标准 JSON 响应
  * @param {any} data - 响应数据
