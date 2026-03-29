@@ -116,6 +116,32 @@
             </div>
           </div>
         </div>
+        <div class="card">
+          <div class="card-header">
+            <h2><span class="card-icon">📦</span><span>用户的邮箱列表</span><span id="mailboxes-count" class="mailboxes-count">（0 邮箱）</span></h2>
+            <button id="mailboxes-refresh" class="btn btn-ghost btn-sm" title="刷新邮箱列表" style="display:none">
+              <span>🔄</span>
+              <span>刷新</span>
+            </button>
+          </div>
+          <div id="user-mailboxes-loading" class="loading-indicator" style="margin: 4px 0 8px 0; display:none">
+            <div class="spinner"></div>
+            <span>加载中…</span>
+          </div>
+          <div id="user-mailboxes">
+            <div class="mailbox-list"></div>
+          </div>
+          <div class="pagination-container" id="mailboxes-pagination" style="display:none">
+            <div class="pagination-info">
+              <span id="mailboxes-pagination-text">显示 1-20 条，共 0 条</span>
+            </div>
+            <div class="pagination-controls">
+              <button id="mailboxes-prev-page" class="btn btn-ghost btn-sm" disabled>上一页</button>
+              <span id="mailboxes-page-info">1 / 1</span>
+              <button id="mailboxes-next-page" class="btn btn-ghost btn-sm" disabled>下一页</button>
+            </div>
+          </div>
+        </div>
       </div>
       <div class="admin-right">
         <div class="card">
@@ -157,33 +183,6 @@
             </table>
           </div>
           <div id="api-key-empty" class="empty">暂无 API Key</div>
-        </div>
-
-        <div class="card">
-          <div class="card-header">
-            <h2><span class="card-icon">📦</span><span>用户的邮箱列表</span><span id="mailboxes-count" class="mailboxes-count">（0 邮箱）</span></h2>
-            <button id="mailboxes-refresh" class="btn btn-ghost btn-sm" title="刷新邮箱列表" style="display:none">
-              <span>🔄</span>
-              <span>刷新</span>
-            </button>
-          </div>
-          <div id="user-mailboxes-loading" class="loading-indicator" style="margin: 4px 0 8px 0; display:none">
-            <div class="spinner"></div>
-            <span>加载中…</span>
-          </div>
-          <div id="user-mailboxes">
-            <div class="mailbox-list"></div>
-          </div>
-          <div class="pagination-container" id="mailboxes-pagination" style="display:none">
-            <div class="pagination-info">
-              <span id="mailboxes-pagination-text">显示 1-20 条，共 0 条</span>
-            </div>
-            <div class="pagination-controls">
-              <button id="mailboxes-prev-page" class="btn btn-ghost btn-sm" disabled>上一页</button>
-              <span id="mailboxes-page-info">1 / 1</span>
-              <button id="mailboxes-next-page" class="btn btn-ghost btn-sm" disabled>下一页</button>
-            </div>
-          </div>
         </div>
 
         <div id="mailbox-settings-card" class="card">
