@@ -10,9 +10,15 @@ import {
   hasApiKeyScope,
   touchApiKeyUsage,
   getMailboxIdByAddress,
-  getOrCreateMailboxId
+  getOrCreateMailboxId,
+  getMailboxAddressingSettings
 } from '../db/index.js';
-import { extractEmail, generateRandomId } from '../utils/common.js';
+import {
+  normalizeAllowedDomains,
+  parseConfiguredMailboxAddress,
+  buildGeneratedMailboxAddress
+} from '../utils/mailboxAddressing.js';
+import { extractEmail } from '../utils/common.js';
 
 function getExternalApiKey(request) {
   const xApiKey = request.headers.get('X-API-Key') || request.headers.get('x-api-key') || '';
@@ -44,58 +50,58 @@ async function requireApiKeyScope(request, db, requiredScope) {
 
 function getDomains(mailDomains, isMock) {
   if (isMock) return MOCK_DOMAINS;
-  if (Array.isArray(mailDomains) && mailDomains.length) return mailDomains;
-  return [(mailDomains || 'temp.example.com')].filter(Boolean);
+  return normalizeAllowedDomains(mailDomains);
 }
 
-function normalizeMailboxInput(body, domains) {
+function normalizeMailboxInput(body, domains, settings) {
   const fullAddress = String(body.address || '').trim().toLowerCase();
   if (fullAddress) {
     const normalized = extractEmail(fullAddress).trim().toLowerCase();
-    const parts = normalized.split('@');
-    if (parts.length !== 2 || !parts[0] || !parts[1]) {
-      throw new Error('邮箱地址格式无效');
-    }
-    if (!domains.includes(parts[1])) {
-      throw new Error('邮箱域名不在允许列表中');
-    }
-    if (!/^[a-z0-9._-]{1,64}$/i.test(parts[0])) {
-      throw new Error('邮箱前缀格式无效');
-    }
-    return normalized;
+    return parseConfiguredMailboxAddress(normalized, domains).address;
   }
 
   const local = String(body.local || '').trim().toLowerCase();
-  const domain = String(body.domain || '').trim().toLowerCase();
+  const domain = String(body.domain || body.base_domain || '').trim().toLowerCase();
+  const requestedVersion = String(body.format_version || body.formatVersion || '').trim();
+  const subdomainMode = String(body.subdomain_mode || body.subdomainMode || (body.subdomain ? 'custom' : 'random')).trim() || 'random';
+  const subdomain = String(body.subdomain || '').trim().toLowerCase();
+  const subdomainLength = body.subdomain_length ?? body.subdomainLength;
 
   if (local && domain) {
-    if (!/^[a-z0-9._-]{1,64}$/i.test(local)) {
-      throw new Error('邮箱前缀格式无效');
-    }
-    if (!domains.includes(domain)) {
-      throw new Error('邮箱域名不在允许列表中');
-    }
-    return `${local}@${domain}`;
+    return buildGeneratedMailboxAddress({
+      settings,
+      domains,
+      local,
+      domainIndex: domains.indexOf(domain),
+      formatVersion: requestedVersion,
+      subdomainMode,
+      subdomain,
+      subdomainLength
+    }).address;
   }
 
   if (local && !domain) {
-    if (!domains.length) {
-      throw new Error('当前没有可用邮箱域名');
-    }
-    if (!/^[a-z0-9._-]{1,64}$/i.test(local)) {
-      throw new Error('邮箱前缀格式无效');
-    }
-    const randomDomain = domains[Math.floor(Math.random() * domains.length)];
-    return `${local}@${randomDomain}`;
+    return buildGeneratedMailboxAddress({
+      settings,
+      domains,
+      local,
+      formatVersion: requestedVersion,
+      subdomainMode,
+      subdomain,
+      subdomainLength
+    }).address;
   }
 
   if (!local && !domain) {
-    if (!domains.length) {
-      throw new Error('当前没有可用邮箱域名');
-    }
-    const randomLocal = generateRandomId(Math.floor(Math.random() * 6) + 8);
-    const randomDomain = domains[Math.floor(Math.random() * domains.length)];
-    return `${randomLocal}@${randomDomain}`;
+    return buildGeneratedMailboxAddress({
+      settings,
+      domains,
+      formatVersion: requestedVersion,
+      subdomainMode,
+      subdomain,
+      subdomainLength,
+      localLength: body.local_length ?? body.localLength
+    }).address;
   }
 
   throw new Error('缺少 address 或 local/domain 参数');
@@ -118,7 +124,8 @@ export async function handleExternalApi(request, db, mailDomains, url, path, opt
 
     try {
       const body = await request.json();
-      const address = normalizeMailboxInput(body, domains);
+      const settings = isMock ? { version: 'v2' } : await getMailboxAddressingSettings(db);
+      const address = normalizeMailboxInput(body, domains, settings);
 
       if (isMock) {
         const now = new Date().toISOString().replace('T', ' ').slice(0, 19);

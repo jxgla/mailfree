@@ -34,7 +34,7 @@ import {
 } from './modules/app/domains.js';
 import { initCompose, showSentEmailDetail } from './modules/app/compose.js';
 import { showEmailDetail, deleteEmailById, deleteSentById, copyFromEmailList, prefetchEmails } from './modules/app/email-viewer.js';
-import { generateMailbox, generateNameMailbox, createCustomMailbox, selectMailboxAddress, toggleMailboxPin, deleteMailboxAddress, copyMailboxAddress, clearAllEmails, logout } from './modules/app/mailbox-actions.js';
+import { generateMailbox, generateNameMailbox, createCustomMailbox, selectMailboxAddress, toggleMailboxPin, deleteMailboxAddress, copyMailboxAddress, clearAllEmails } from './modules/app/mailbox-actions.js';
 
 // 全局状态
 window.__GUEST_MODE__ = false;
