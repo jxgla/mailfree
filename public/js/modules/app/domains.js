@@ -52,21 +52,13 @@ export function setDomains(list) {
 export function populateDomains(domainList, selectElement) {
   if (!selectElement) return;
   const list = Array.isArray(domainList) ? domainList : [];
-  selectElement.innerHTML = [
-    '<option value="">随机选择可用域名</option>',
-    ...list.map((d, i) => `<option value="${i}">${d}</option>`)
-  ].join('');
+  selectElement.innerHTML = list.map((d, i) => `<option value="${i}">${d}</option>`).join('');
 
   const stored = localStorage.getItem(STORAGE_KEYS.domain) || '';
   const idx = stored ? list.indexOf(stored) : -1;
-  selectElement.value = idx >= 0 ? String(idx) : '';
+  selectElement.selectedIndex = idx >= 0 ? idx : 0;
 
   selectElement.onchange = () => {
-    const value = selectElement.value;
-    if (value === '') {
-      localStorage.removeItem(STORAGE_KEYS.domain);
-      return;
-    }
     const opt = selectElement.options[selectElement.selectedIndex];
     if (opt) localStorage.setItem(STORAGE_KEYS.domain, opt.textContent || '');
   };
