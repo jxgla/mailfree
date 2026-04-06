@@ -3,12 +3,12 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>用户管理 - iDing's临时邮箱</title>
+    <title>用户管理 - CF邮箱</title>
     <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate" />
     <meta http-equiv="Pragma" content="no-cache" />
     <meta http-equiv="Expires" content="0" />
     <noscript>
-      <meta http-equiv="refresh" content="0; url=/templates/loading.html?redirect=%2Fhtml%2Fadmin.html" />
+      <meta http-equiv="refresh" content="0; url=/html/login.html" />
     </noscript>
     <style>.precheck-hide body{ visibility: hidden !important; }</style>
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
@@ -30,9 +30,8 @@
             location.replace('/');
           })
           .catch(() => {
-            // 未登录：进入加载页做鉴权
-            if (window.AuthGuard) { window.AuthGuard.goLoading('/html/admin.html', '正在校验权限…'); }
-            else { location.replace('/templates/loading.html?redirect=%2Fhtml%2Fadmin.html&status=' + encodeURIComponent('正在校验权限…')); }
+            // 未登录：直接进入登录页
+            location.replace('/html/login.html');
           });
       })();
     </script>
@@ -40,14 +39,26 @@
   <body class="admin-page">
     <div class="topbar">
       <div class="brand">
-        <span class="brand-icon">🚀</span>
-        <span>iDing's临时邮箱 - 用户管理</span>
+        <span class="brand-icon">📧</span>
+        <span>CF邮箱</span>
       </div>
       <div class="nav-actions">
-        <button id="back" class="btn btn-ghost" title="返回邮箱">
-          <span>📧</span>
-          <span>返回邮箱</span>
+        <a class="btn btn-ghost" href="/" title="首页">
+          <span>🏠</span>
+          <span>首页</span>
+        </a>
+        <button id="section-users-btn" class="btn btn-ghost" type="button" title="用户管理">
+          <span>🛠️</span>
+          <span>用户管理</span>
         </button>
+        <button id="section-api-btn" class="btn btn-ghost" type="button" title="API设置">
+          <span>🔑</span>
+          <span>API设置</span>
+        </button>
+        <a class="btn btn-ghost" href="/html/mailboxes.html" title="所有邮箱">
+          <span>📦</span>
+          <span>所有邮箱</span>
+        </a>
         <button id="logout" class="btn btn-secondary" title="退出登录">
           <span>👋</span>
           <span>退出登录</span>
@@ -56,7 +67,7 @@
     </div>
     <div id="demo-banner" class="demo-banner" style="display:none">当前为演示管理页：所有改动仅在浏览器会话中模拟</div>
     <div class="admin-container">
-      <div class="admin-left">
+      <div class="admin-left" id="admin-users-area" data-admin-section="users">
         <div class="card">
           <h2><span class="card-icon">👤</span><span>用户管理</span></h2>
           <div class="generate-action">
@@ -76,7 +87,7 @@
             </button>
           </div>
         </div>
-   
+
         <div class="card">
           <div class="card-header">
             <h2><span class="card-icon">📋</span><span>用户列表</span><span id="users-count" class="users-count">（0 用户）</span></h2>
@@ -143,8 +154,8 @@
           </div>
         </div>
       </div>
-      <div class="admin-right">
-        <div class="card">
+      <div class="admin-right" id="admin-api-area" data-admin-section="api" style="display:none">
+        <div id="api-settings" class="card">
           <div class="card-header">
             <h2><span class="card-icon">🔑</span><span>External API</span><span id="api-key-count" class="users-count">（0 Keys）</span></h2>
             <div class="api-card-actions">
@@ -201,7 +212,9 @@
               <label class="config-label">新版默认 yyy 长度</label>
               <input id="mailbox-sub-len" class="input" type="number" min="3" max="30" value="3" />
               <div id="mailbox-settings-status" class="help-text">当前默认：新版 xxx@yyy.域名</div>
-              <button id="mailbox-settings-save" class="btn btn-primary" type="button" style="margin-top:16px;width:100%;display:flex;justify-content:center;align-items:center;min-height:52px;">保存邮箱格式设置</button>
+            </div>
+            <div class="generate-action">
+              <button id="mailbox-settings-save" class="btn btn-primary">保存邮箱格式设置</button>
             </div>
           </div>
         </div>
@@ -413,5 +426,3 @@
     </script>
   </body>
   </html>
-
-

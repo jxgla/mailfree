@@ -78,13 +78,16 @@ export function applySessionUI(session) {
     }
     
     const adminLink = document.getElementById('admin');
+    const apiSettingsLink = document.getElementById('api-settings-link');
     const allMailboxesLink = document.getElementById('all-mailboxes');
-    
+
     if (session && (session.strictAdmin || session.role === 'guest')) {
       if (adminLink) adminLink.style.display = 'inline-flex';
+      if (apiSettingsLink) apiSettingsLink.style.display = 'inline-flex';
       if (allMailboxesLink) allMailboxesLink.style.display = 'inline-flex';
     } else {
       if (adminLink) adminLink.style.display = 'none';
+      if (apiSettingsLink) apiSettingsLink.style.display = 'none';
       if (allMailboxesLink) allMailboxesLink.style.display = 'none';
     }
   } catch(_) {}

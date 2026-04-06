@@ -3,6 +3,12 @@
  * @module modules/mailboxes/render
  */
 
+function createElementFromHtml(html) {
+  const template = document.createElement('template');
+  template.innerHTML = html.trim();
+  return template.content.firstElementChild;
+}
+
 /**
  * 格式化时间
  * @param {string} ts - 时间戳
@@ -65,7 +71,7 @@ export function renderCard(m) {
   const addr = escapeHtml(m.address);
   const time = formatTime(m.created_at);
   const forward = m.forward_to ? escapeHtml(m.forward_to) : '';
-  
+
   return `
     <div class="mailbox-card" data-address="${addr}" data-id="${m.id}" data-action="jump">
       ${m.is_pinned ? '<div class="pin-badge" title="置顶">📌</div>' : ''}
@@ -93,7 +99,7 @@ export function renderListItem(m) {
   const addr = escapeHtml(m.address);
   const time = formatTime(m.created_at);
   const forward = m.forward_to ? escapeHtml(m.forward_to) : '';
-  
+
   return `
     <div class="mailbox-list-item" data-address="${addr}" data-id="${m.id}">
       <div class="pin-indicator">
@@ -106,8 +112,8 @@ export function renderListItem(m) {
           <span class="meta-status meta-pwd" title="${m.password_is_default ? '默认密码' : '已设密码'}">${m.password_is_default ? '🔓' : '🔐'}</span>
           <span class="meta-status meta-login ${m.can_login ? 'enabled' : 'disabled'}" title="${m.can_login ? '允许登录' : '禁止登录'}">${m.can_login ? '✅' : '🚫'}</span>
           <span class="meta-status meta-fav ${m.is_favorite ? 'active' : ''}" title="${m.is_favorite ? '已收藏' : '未收藏'}">${m.is_favorite ? '⭐' : '☆'}</span>
-          ${forward 
-            ? `<span class="meta-forward" title="转发到: ${forward}">📤 ${forward.length > 20 ? forward.substring(0, 20) + '...' : forward}</span>` 
+          ${forward
+            ? `<span class="meta-forward" title="转发到: ${forward}">📤 ${forward.length > 20 ? forward.substring(0, 20) + '...' : forward}</span>`
             : '<span class="meta-status meta-forward-empty" title="未设置转发">—</span>'}
         </div>
       </div>
@@ -143,7 +149,90 @@ export function renderList(list) {
   return list.map(m => renderListItem(m)).join('');
 }
 
+export function patchMailboxCollection(list, container, view = 'list') {
+  if (!container) return false;
+  const items = Array.isArray(list) ? list : [];
+
+  if (!items.length) {
+    if (container.innerHTML !== '') {
+      container.innerHTML = '';
+      return true;
+    }
+    return false;
+  }
+
+  const renderItem = view === 'grid' ? renderCard : renderListItem;
+  const nodeClass = view === 'grid' ? '.mailbox-card[data-address]' : '.mailbox-list-item[data-address]';
+  const existingNodes = new Map();
+  Array.from(container.querySelectorAll(nodeClass)).forEach((node) => {
+    existingNodes.set(String(node.dataset.address || ''), node);
+  });
+
+  let changed = false;
+  const nextNodes = [];
+
+  for (const item of items) {
+    const key = String(item?.address || '');
+    const expectedHtml = renderItem(item).trim();
+    let node = existingNodes.get(key);
+
+    if (!node) {
+      node = createElementFromHtml(expectedHtml);
+      changed = true;
+    } else {
+      existingNodes.delete(key);
+      if (node.outerHTML.trim() !== expectedHtml) {
+        const nextNode = createElementFromHtml(expectedHtml);
+        node.replaceWith(nextNode);
+        node = nextNode;
+        changed = true;
+      }
+    }
+
+    nextNodes.push(node);
+  }
+
+  if (existingNodes.size) {
+    existingNodes.forEach((node) => node.remove());
+    changed = true;
+  }
+
+  nextNodes.forEach((node, index) => {
+    if (container.children[index] !== node) {
+      container.insertBefore(node, container.children[index] || null);
+      changed = true;
+    }
+  });
+
+  return changed;
+}
+
+export function patchMailboxEmailPanel(list, container) {
+  if (!container) return false;
+  const items = Array.isArray(list) ? list : [];
+  const nextHtml = items.map((mail) => {
+    const sender = escapeHtml(mail?.sender || '未知发件人');
+    const subject = escapeHtml(mail?.subject || '(无主题)');
+    const preview = escapeHtml(mail?.preview || '');
+    const time = formatTime(mail?.received_at || mail?.created_at || '');
+    const code = escapeHtml(mail?.verification_code || '');
+
+    return `<div class="mailbox-email-item" data-mail-id="${mail?.id ?? ''}">
+      <div class="mailbox-email-meta">${time} · 发件人：${sender}${code ? ` · 验证码：${code}` : ''}</div>
+      <div class="mailbox-email-subject">${subject}</div>
+      ${preview ? `<div class="mailbox-email-preview">${preview}</div>` : ''}
+    </div>`;
+  }).join('');
+
+  if (container.innerHTML !== nextHtml) {
+    container.innerHTML = nextHtml;
+    return true;
+  }
+  return false;
+}
+
 export default {
   formatTime, escapeHtml, createSkeletonCard, createSkeletonListItem,
-  generateSkeleton, renderCard, renderListItem, renderGrid, renderList
+  generateSkeleton, renderCard, renderListItem, renderGrid, renderList,
+  patchMailboxCollection, patchMailboxEmailPanel
 };

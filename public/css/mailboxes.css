@@ -1817,13 +1817,222 @@
     width: 95vw;
     max-height: 95vh;
   }
-  
+
   .subpage-header, .subpage-body, .subpage-footer {
     padding: 16px;
   }
-  
+
   .subpage-body {
     gap: 16px;
   }
+}
+
+/* ===== flat low-motion overrides ===== */
+.page-mailboxes .card,
+.page-mailboxes .modal,
+.page-mailboxes .modal-card,
+.page-mailboxes .mailbox-card,
+.page-mailboxes .mailbox-list-item,
+.page-mailboxes .list-actions,
+.page-mailboxes .view-toggle,
+.page-mailboxes .view-toggle .btn,
+.page-mailboxes .batch-actions .btn,
+.page-mailboxes .filter-select,
+.page-mailboxes .searchbar,
+.page-mailboxes .subpage-content,
+.page-mailboxes .subpage-overlay,
+.page-mailboxes .subpage-header,
+.page-mailboxes .assign-mailbox-info,
+.page-mailboxes .users-list,
+.page-mailboxes .user-item,
+.page-mailboxes .selected-user-tag,
+.page-mailboxes .loading-placeholder .skeleton-card,
+.page-mailboxes .loading-placeholder .skeleton-list-item,
+.page-mailboxes .mailbox-email-item {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  transition: none !important;
+  animation: none !important;
+  transform: none !important;
+  box-shadow: none !important;
+}
+
+.page-mailboxes #grid.grid,
+.page-mailboxes .grid,
+.page-mailboxes #grid.list,
+.page-mailboxes .list {
+  transition: none !important;
+}
+
+.page-mailboxes .mailbox-card::before,
+.page-mailboxes .list-actions .btn::before,
+.page-mailboxes .view-toggle .btn::before {
+  display: none !important;
+  content: none !important;
+}
+
+.page-mailboxes .mailbox-card,
+.page-mailboxes .mailbox-list-item,
+.page-mailboxes .modal-card,
+.page-mailboxes .filter-select,
+.page-mailboxes .view-toggle,
+.page-mailboxes .list-actions,
+.page-mailboxes .subpage-content,
+.page-mailboxes .users-list,
+.page-mailboxes .assign-mailbox-info,
+.page-mailboxes .selected-user-tag,
+.page-mailboxes .mailbox-email-item {
+  background: #ffffff !important;
+  border: 1px solid #e2e8f0 !important;
+}
+
+.page-mailboxes .mailbox-card:hover,
+.page-mailboxes .mailbox-card:active,
+.page-mailboxes .mailbox-list-item:hover,
+.page-mailboxes .list-actions .btn:hover,
+.page-mailboxes .list-actions .btn:active,
+.page-mailboxes .view-toggle .btn:not(.active):hover,
+.page-mailboxes .view-toggle .btn:active,
+.page-mailboxes .batch-actions .btn:hover,
+.page-mailboxes .modal-header .close:hover,
+.page-mailboxes .user-item:hover,
+.page-mailboxes .subpage-close:hover,
+.page-mailboxes .pin-icon,
+.page-mailboxes .favorite-icon,
+.page-mailboxes .forward-icon,
+.page-mailboxes .mailbox-card .pin-badge:hover,
+.page-mailboxes .mailbox-card .favorite-badge:hover,
+.page-mailboxes .mailbox-card .forward-badge:hover,
+.page-mailboxes .mailbox-card .actions .btn-icon:hover,
+.page-mailboxes .mailbox-card .actions .btn-icon:active {
+  transform: none !important;
+  box-shadow: none !important;
+}
+
+.page-mailboxes .card,
+.page-mailboxes .mailbox-card,
+.page-mailboxes .mailbox-list-item,
+.page-mailboxes .modal-card,
+.page-mailboxes .list-actions,
+.page-mailboxes .view-toggle,
+.page-mailboxes .subpage-content,
+.page-mailboxes .users-list,
+.page-mailboxes .assign-mailbox-info,
+.page-mailboxes .selected-user-tag,
+.page-mailboxes .mailbox-email-item {
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06) !important;
+}
+
+.page-mailboxes .mailbox-card {
+  border-radius: 12px;
+  background: #ffffff !important;
+}
+
+.page-mailboxes .mailbox-card::before {
+  opacity: 0 !important;
+}
+
+.page-mailboxes .mailbox-card .pin-badge,
+.page-mailboxes .mailbox-card .favorite-badge,
+.page-mailboxes .mailbox-card .forward-badge {
+  background: #f8fafc !important;
+  color: #334155 !important;
+  border: 1px solid #e2e8f0 !important;
+}
+
+.page-mailboxes .mailbox-card .actions {
+  opacity: 1 !important;
+  background: #ffffff !important;
+  border: 1px solid #e2e8f0 !important;
+}
+
+.page-mailboxes .mailbox-card .actions .btn-icon,
+.page-mailboxes .list-actions .btn,
+.page-mailboxes .view-toggle .btn {
+  background: #ffffff !important;
+  border: 1px solid #e2e8f0 !important;
+  color: #475569 !important;
+}
+
+.page-mailboxes .mailbox-card .actions .btn-icon.active,
+.page-mailboxes .list-actions .btn.active,
+.page-mailboxes .view-toggle .btn.active {
+  background: #eff6ff !important;
+  color: #1d4ed8 !important;
+  border-color: #bfdbfe !important;
+}
+
+.page-mailboxes .mailbox-card.active,
+.page-mailboxes .mailbox-list-item.active {
+  border-color: #93c5fd !important;
+  background: #eff6ff !important;
+}
+
+.page-mailboxes .loading-placeholder.show .skeleton-card,
+.page-mailboxes .loading-placeholder.show .skeleton-list-item,
+.page-mailboxes .skeleton-line {
+  animation: none !important;
+  background: #e2e8f0 !important;
+}
+
+.page-mailboxes .modal {
+  background: rgba(15, 23, 42, 0.35) !important;
+}
+
+.page-mailboxes .modal-header,
+.page-mailboxes .subpage-header {
+  background: #ffffff !important;
+  border-bottom: 1px solid #e2e8f0 !important;
+}
+
+.page-mailboxes .modal-body,
+.page-mailboxes .subpage-body,
+.page-mailboxes .subpage-footer {
+  background: #ffffff !important;
+}
+
+.page-mailboxes .filter-select:focus,
+.page-mailboxes .form-input:focus,
+.page-mailboxes .form-textarea:focus,
+.page-mailboxes .user-search .search-input:focus {
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.10) !important;
+  border-color: #93c5fd !important;
+}
+
+.page-mailboxes .mailbox-emails-panel {
+  margin-top: 16px;
+}
+
+.page-mailboxes .mailbox-emails-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.page-mailboxes .mailbox-email-item {
+  padding: 12px 14px;
+  border-radius: 10px;
+}
+
+.page-mailboxes .mailbox-email-meta {
+  color: #64748b;
+  font-size: 12px;
+  margin-bottom: 6px;
+}
+
+.page-mailboxes .mailbox-email-subject {
+  color: #0f172a;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.page-mailboxes .mailbox-email-preview {
+  color: #475569;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.page-mailboxes .subpage-overlay {
+  background: rgba(15, 23, 42, 0.35) !important;
 }
 

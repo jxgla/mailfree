@@ -3156,3 +3156,325 @@ select:disabled{
 .search-input{ flex:1; border:none; background: transparent; outline: none; padding: 6px 8px; font-size:14px; color: var(--text); }
 .search-input::placeholder{ color: var(--muted2); }
 .page-mailboxes .btn-sm{ height:36px; }
+
+/* ===== low-motion flat overrides ===== */
+:root{
+  --surface: #f8fafc;
+  --surface-overlay: #f8fafc;
+  --surface-pattern: none;
+  --surface-mesh: none;
+  --card: #ffffff;
+  --card-hover: #ffffff;
+  --card-glass: #ffffff;
+  --card-glass-hover: #ffffff;
+  --card-gradient: #ffffff;
+  --card-gradient-accent: none;
+  --border-glass: #e2e8f0;
+  --border-focus: #bfdbfe;
+  --shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
+  --shadow-md: 0 2px 8px rgba(15, 23, 42, 0.08);
+  --shadow-lg: 0 4px 12px rgba(15, 23, 42, 0.08);
+  --shadow-xl: 0 8px 20px rgba(15, 23, 42, 0.08);
+  --shadow-2xl: 0 12px 28px rgba(15, 23, 42, 0.12);
+  --shadow-glass: 0 1px 2px rgba(15, 23, 42, 0.06);
+  --shadow-colored: 0 2px 8px rgba(59, 130, 246, 0.12);
+  --shadow-glow: none;
+  --shadow-button: 0 1px 2px rgba(15, 23, 42, 0.08);
+  --shadow-button-hover: 0 2px 8px rgba(15, 23, 42, 0.10);
+  --transition: none;
+  --transition-fast: none;
+  --transition-slow: none;
+  --blur-sm: none;
+  --blur-md: none;
+  --blur-lg: none;
+  --blur-xl: none;
+}
+
+body::before,
+body::after,
+.demo-banner::before,
+.topbar::before,
+.card::after,
+.email-display::before,
+.btn::before,
+.btn::after,
+.mailbox-item::before,
+.status-badge::before{
+  display:none !important;
+  content:none !important;
+}
+
+body,
+.topbar,
+.sidebar,
+.card,
+.modal,
+.modal-card,
+.btn,
+.input,
+.textarea,
+.select,
+.searchbar,
+.email-display,
+.mailbox-item,
+.email-item,
+.view-switch,
+.sidebar-toggle-btn,
+.role-badge,
+.loading-indicator,
+.email-meta-card,
+.email-actions-bar,
+.control-row,
+.custom-overlay,
+.field-input,
+.field-textarea{
+  backdrop-filter:none !important;
+  -webkit-backdrop-filter:none !important;
+  transition:none !important;
+  animation:none !important;
+  transform:none !important;
+  text-shadow:none !important;
+}
+
+body{
+  background:#f8fafc !important;
+}
+
+.topbar{
+  position:sticky;
+  top:0;
+  max-width:1200px;
+  margin:0 auto;
+  padding:12px 20px;
+  gap:16px;
+  background:#ffffff;
+  border-bottom:1px solid #e2e8f0;
+  box-shadow:0 1px 2px rgba(15, 23, 42, 0.06);
+}
+
+.brand,
+.brand:hover,
+.brand span,
+.brand-icon,
+.card-icon,
+.sidebar-icon,
+.btn:hover .btn-icon,
+.btn-danger:hover .btn-icon,
+.mailbox-actions .btn:hover .btn-icon{
+  animation:none !important;
+  transform:none !important;
+  filter:none !important;
+}
+
+.brand span{
+  background:none !important;
+  -webkit-text-fill-color:initial !important;
+  color:#0f172a !important;
+}
+
+.nav-actions{
+  display:flex;
+  gap:8px;
+  margin-left:auto;
+  align-items:center;
+  flex-wrap:wrap;
+}
+
+.role-badge{
+  margin-left:0;
+  padding:4px 10px;
+  border:1px solid #e2e8f0;
+  background:#f8fafc;
+  box-shadow:none;
+}
+
+.container{
+  max-width:1200px;
+  gap:16px;
+  padding:16px;
+  min-height:auto;
+}
+
+.sidebar,
+.card,
+.email-display,
+.modal-card,
+.email-content-area,
+.email-meta-card,
+.email-actions-bar,
+.control-row,
+.searchbar,
+.view-switch{
+  background:#ffffff !important;
+  border:1px solid #e2e8f0 !important;
+  box-shadow:0 1px 2px rgba(15, 23, 42, 0.06) !important;
+}
+
+.sidebar:hover,
+.card:hover,
+.mailbox-item:hover,
+.email-item:hover,
+.btn:hover,
+.btn:active,
+.btn-primary:hover,
+.btn-secondary:hover,
+.btn-danger:hover,
+.btn-ghost:hover,
+.close:hover,
+.sidebar-toggle-btn:hover,
+.seg-btn:hover,
+.select:focus,
+.input:focus,
+.textarea:focus,
+.field-input:focus,
+.field-textarea:focus,
+.email-item.clickable:active,
+.mailbox-item.selected:hover,
+.mailbox-item.pinned:hover,
+.container.sidebar-collapsed .inbox-card:hover,
+.container.sidebar-collapsed .btn-generate:hover{
+  transform:none !important;
+  box-shadow:0 1px 2px rgba(15, 23, 42, 0.06) !important;
+}
+
+.sidebar{
+  top:76px;
+  padding:16px;
+  max-height:calc(100vh - 92px);
+}
+
+.sidebar-toggle-btn,
+.btn,
+.close,
+.seg-btn,
+.select,
+.field-input,
+.field-textarea,
+.custom-input{
+  box-shadow:none !important;
+}
+
+.sidebar-toggle-btn{
+  background:#ffffff;
+  border:1px solid #e2e8f0;
+}
+
+.mailbox-item,
+.email-item{
+  background:#ffffff !important;
+  border:1px solid #e2e8f0 !important;
+}
+
+.mailbox-item.selected,
+.mailbox-item.pinned.selected{
+  background:#eff6ff !important;
+  border:1px solid #93c5fd !important;
+  border-left:3px solid #2563eb !important;
+  box-shadow:none !important;
+  padding-left:20px;
+}
+
+.mailbox-item.pinned{
+  background:#fff7ed !important;
+  border-left:3px solid #f59e0b !important;
+  box-shadow:none !important;
+}
+
+.mailbox-item .mailbox-actions,
+.email-actions{
+  opacity:1 !important;
+  pointer-events:auto !important;
+}
+
+.card::before,
+.modal-header::before,
+.email-content-area::before{
+  height:1px !important;
+  background:#e2e8f0 !important;
+  opacity:1 !important;
+}
+
+.generate-card,
+.inbox-card,
+.email-display.has-email,
+.email-meta-card,
+.confirm-header,
+.btn-primary,
+.btn-danger,
+.btn-secondary,
+.btn-ghost,
+.btn-generate{
+  background:#ffffff !important;
+  color:inherit !important;
+  border:1px solid #e2e8f0 !important;
+}
+
+.btn-primary{
+  background:#2563eb !important;
+  color:#ffffff !important;
+  border-color:#2563eb !important;
+}
+
+.btn-danger{
+  background:#dc2626 !important;
+  color:#ffffff !important;
+  border-color:#dc2626 !important;
+}
+
+.btn-secondary,
+.btn-ghost,
+.btn-generate,
+.seg-btn{
+  background:#ffffff !important;
+  color:#334155 !important;
+}
+
+.seg-btn[aria-pressed="true"]{
+  background:#eff6ff !important;
+  color:#1d4ed8 !important;
+}
+
+.modal{
+  background:rgba(15, 23, 42, 0.35) !important;
+}
+
+.modal-body{
+  background:#ffffff !important;
+}
+
+.email-content-text,
+.confirm-message,
+.meta-value,
+.code-highlight,
+.email-no-content,
+.range-display{
+  background:#f8fafc !important;
+  border:1px solid #e2e8f0 !important;
+  box-shadow:none !important;
+}
+
+.code-highlight::before{
+  box-shadow:none !important;
+}
+
+.quota-display.admin-quota,
+.role-admin,
+.role-super,
+.role-user,
+.status-badge,
+.status-queued,
+.status-delivered,
+.status-failed,
+.status-processing{
+  box-shadow:none !important;
+}
+
+@media (max-width: 768px) {
+  .topbar{
+    padding:10px 12px;
+  }
+
+  .brand-text{ display:none; }
+  .nav-actions .btn .btn-text{ display:none; }
+  .nav-actions .btn{ padding-left:10px; padding-right:10px; }
+}

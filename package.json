@@ -1,0 +1,14 @@
+{
+  "name": "mailfree",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler versions upload",
+    "deploy:full": "wrangler deploy"
+  },
+  "devDependencies": {
+    "wrangler": "^4.39.0"
+  }
+}

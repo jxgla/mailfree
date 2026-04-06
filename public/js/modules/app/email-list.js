@@ -6,6 +6,12 @@
 import { formatTs, formatTsMobile, extractCode, escapeHtml } from './ui-helpers.js';
 import { getCurrentMailbox } from './mailbox-state.js';
 
+function createElementFromHtml(html) {
+  const template = document.createElement('template');
+  template.innerHTML = html.trim();
+  return template.content.firstElementChild;
+}
+
 // 分页状态
 const PAGE_SIZE = 8;
 let currentPage = 1;
@@ -167,9 +173,12 @@ export function renderEmailItem(email, isMobile = false) {
   const metaLabel = isSentView ? '收件人' : '发件人';
   const metaText = isSentView ? escapeHtml(recipientsDisplay) : senderText;
   const timeDisplay = isMobile ? formatTsMobile(e.received_at || e.created_at) : formatTs(e.received_at || e.created_at);
-  
+  const detailAction = isSentView ? `showSentEmail(${e.id})` : `showEmail(${e.id})`;
+  const deleteAction = isSentView ? `deleteSent(${e.id});event.stopPropagation()` : `deleteEmail(${e.id});event.stopPropagation()`;
+  const itemType = isSentView ? 'sent' : 'inbox';
+
   return `
-    <div class="email-item clickable" onclick="${isSentView ? `showSentEmail(${e.id})` : `showEmail(${e.id})`}">
+    <div class="email-item clickable" data-email-id="${e.id}" data-email-type="${itemType}" onclick="${detailAction}">
       <div class="email-meta">
         <span class="meta-from"><span class="meta-label">${metaLabel}</span><span class="meta-from-text">${metaText}</span></span>
         <span class="email-time"><span class="time-icon">🕐</span>${timeDisplay}</span>
@@ -182,14 +191,71 @@ export function renderEmailItem(email, isMobile = false) {
         <div class="email-actions">
           ${isSentView ? `
             <span class="status-badge ${statusClass(e.status)}">${e.status || 'unknown'}</span>
-            <button class="btn btn-danger btn-sm" onclick="deleteSent(${e.id});event.stopPropagation()" title="删除记录"><span class="btn-icon">🗑️</span></button>
+            <button class="btn btn-danger btn-sm" onclick="${deleteAction}" title="删除记录"><span class="btn-icon">🗑️</span></button>
           ` : `
             <button class="btn btn-secondary btn-sm" data-code="${listCode || ''}" onclick="copyFromList(event, ${e.id});event.stopPropagation()" title="复制内容或验证码"><span class="btn-icon">📋</span></button>
-            <button class="btn btn-danger btn-sm" onclick="deleteEmail(${e.id});event.stopPropagation()" title="删除邮件"><span class="btn-icon">🗑️</span></button>
+            <button class="btn btn-danger btn-sm" onclick="${deleteAction}" title="删除邮件"><span class="btn-icon">🗑️</span></button>
           `}
         </div>
       </div>
     </div>`;
+}
+
+export function patchEmailList(items, container, isMobile = false) {
+  if (!container) return false;
+
+  const list = Array.isArray(items) ? items : [];
+  if (!list.length) {
+    const nextEmpty = '<div style="text-align:center;color:#64748b">📭 暂无邮件</div>';
+    if (container.innerHTML !== nextEmpty) {
+      container.innerHTML = nextEmpty;
+      return true;
+    }
+    return false;
+  }
+
+  const existingNodes = new Map();
+  Array.from(container.querySelectorAll('.email-item[data-email-id]')).forEach((node) => {
+    existingNodes.set(String(node.dataset.emailId || ''), node);
+  });
+
+  let changed = false;
+  const nextNodes = [];
+
+  for (const email of list) {
+    const key = String(email?.id ?? '');
+    const expectedHtml = renderEmailItem(email, isMobile).trim();
+    let node = existingNodes.get(key);
+
+    if (!node) {
+      node = createElementFromHtml(expectedHtml);
+      changed = true;
+    } else {
+      existingNodes.delete(key);
+      if (node.outerHTML.trim() !== expectedHtml) {
+        const nextNode = createElementFromHtml(expectedHtml);
+        node.replaceWith(nextNode);
+        node = nextNode;
+        changed = true;
+      }
+    }
+
+    nextNodes.push(node);
+  }
+
+  if (existingNodes.size) {
+    existingNodes.forEach((node) => node.remove());
+    changed = true;
+  }
+
+  nextNodes.forEach((node, index) => {
+    if (container.children[index] !== node) {
+      container.insertBefore(node, container.children[index] || null);
+      changed = true;
+    }
+  });
+
+  return changed;
 }
 
 /**
@@ -249,6 +315,7 @@ export default {
   isSentViewActive,
   statusClass,
   renderEmailItem,
+  patchEmailList,
   getEmailFromCache,
   setEmailCache,
   clearEmailCache,

@@ -18,6 +18,9 @@ let apiKeyScopes = [];
 let apiKeys = [];
 let mailboxAddressingSettings = null;
 let sessionInfo = null;
+let usersSectionInitialized = false;
+let apiSectionInitialized = false;
+const usersById = new Map();
 
 // DOM 元素
 const els = {
@@ -108,7 +111,11 @@ const els = {
   confirmMessage: document.getElementById('admin-confirm-message'),
   confirmClose: document.getElementById('admin-confirm-close'),
   confirmCancel: document.getElementById('admin-confirm-cancel'),
-  confirmOk: document.getElementById('admin-confirm-ok')
+  confirmOk: document.getElementById('admin-confirm-ok'),
+  sectionUsersBtn: document.getElementById('section-users-btn'),
+  sectionApiBtn: document.getElementById('section-api-btn'),
+  usersArea: document.getElementById('admin-users-area'),
+  apiArea: document.getElementById('admin-api-area')
 };
 
 // 自定义确认对话框
@@ -317,12 +324,15 @@ async function handleCreateApiKey() {
 
 // 加载用户列表
 async function loadUsers() {
+  usersSectionInitialized = true;
   if (els.usersLoading) els.usersLoading.style.display = 'flex';
   if (els.usersTbody) els.usersTbody.innerHTML = generateSkeletonRows(5);
 
   try {
     const data = await getUsers({ page: currentPage, size: pageSize });
     const users = Array.isArray(data) ? data : (data.list || []);
+    usersById.clear();
+    users.forEach(u => usersById.set(String(u.id), u));
     totalUsers = data.total || users.length;
 
     renderUserList(users, els.usersTbody);
@@ -371,18 +381,19 @@ function bindUserEvents() {
 }
 
 async function openEditModal(userId) {
-  try {
-    const data = await getUsers({ page: 1, size: 100 });
-    const users = Array.isArray(data) ? data : (data.list || []);
-    const user = users.find(u => u.id == userId);
-    if (!user) { showToast('用户不存在', 'error'); return; }
-
-    currentViewingUser = user;
-    fillEditForm(els, user);
-    els.editModal?.classList.add('show');
-  } catch(e) {
-    showToast('加载用户信息失败', 'error');
+  let user = usersById.get(String(userId));
+  if (!user) {
+    await loadUsers();
+    user = usersById.get(String(userId));
   }
+  if (!user) {
+    showToast('用户不存在', 'error');
+    return;
+  }
+
+  currentViewingUser = user;
+  fillEditForm(els, user);
+  els.editModal?.classList.add('show');
 }
 
 async function saveEdit() {
@@ -405,24 +416,27 @@ async function saveEdit() {
   }
 }
 
+// 打开邮箱面板
 async function openMailboxesPanel(userId) {
-  try {
-    const data = await getUsers({ page: 1, size: 100 });
-    const users = Array.isArray(data) ? data : (data.list || []);
-    const user = users.find(u => u.id == userId);
-    if (!user) { showToast('用户不存在', 'error'); return; }
-
-    currentViewingUser = user;
-    mailboxPage = 1;
-    await loadUserMailboxes();
-
-    if (els.userMailboxes) els.userMailboxes.style.display = 'block';
-    if (els.aName) els.aName.value = user.username;
-  } catch(e) {
-    showToast('加载失败', 'error');
+  let user = usersById.get(String(userId));
+  if (!user) {
+    await loadUsers();
+    user = usersById.get(String(userId));
   }
+  if (!user) {
+    showToast('用户不存在', 'error');
+    return;
+  }
+
+  currentViewingUser = user;
+  mailboxPage = 1;
+  await loadUserMailboxes();
+
+  if (els.userMailboxes) els.userMailboxes.style.display = 'block';
+  if (els.aName) els.aName.value = user.username;
 }
 
+// 加载用户邮箱
 async function loadUserMailboxes() {
   if (!currentViewingUser) return;
   if (els.userMailboxesLoading) els.userMailboxesLoading.style.display = 'flex';
@@ -437,19 +451,11 @@ async function loadUserMailboxes() {
     const container = els.userMailboxes?.querySelector('.mailbox-list');
     if (container) {
       container.innerHTML = list.length ? list.map(m => `
-        <div class="mailbox-item clickable" data-address="${m.address}" data-href="/?mailbox=${encodeURIComponent(m.address)}">
+        <div class="mailbox-item" data-address="${m.address}">
           <span class="address">${m.address}</span>
           <button class="btn btn-sm danger" data-action="unassign">取消分配</button>
         </div>
       `).join('') : '<div class="empty">暂无邮箱</div>';
-
-      container.querySelectorAll('.mailbox-item.clickable').forEach(item => {
-        item.onclick = (e) => {
-          if (e.target.closest('[data-action]')) return;
-          const href = item.dataset.href;
-          if (href) location.href = href;
-        };
-      });
 
       container.querySelectorAll('[data-action="unassign"]').forEach(btn => {
         btn.onclick = async (e) => {
@@ -480,6 +486,7 @@ async function loadUserMailboxes() {
   }
 }
 
+// 创建用户
 async function handleCreateUser() {
   const username = els.uName?.value.trim();
   const password = els.uPass?.value.trim();
@@ -502,6 +509,7 @@ async function handleCreateUser() {
   }
 }
 
+// 分配邮箱
 async function handleAssignMailbox() {
   const username = els.aName?.value.trim();
   const addressText = els.aMail?.value.trim();
@@ -554,6 +562,7 @@ async function handleAssignMailbox() {
   }
 }
 
+// 取消分配邮箱
 async function handleUnassignMailbox() {
   const username = els.unassignName?.value.trim();
   const addressText = els.unassignMail?.value.trim();
@@ -606,81 +615,100 @@ async function handleUnassignMailbox() {
   }
 }
 
+function showAdminSection(section) {
+  const isApi = section === 'api';
+
+  if (els.usersArea) els.usersArea.style.display = isApi ? 'none' : '';
+  if (els.apiArea) els.apiArea.style.display = isApi ? '' : 'none';
+
+  if (els.sectionUsersBtn) {
+    els.sectionUsersBtn.classList.toggle('active', !isApi);
+    els.sectionUsersBtn.setAttribute('aria-pressed', (!isApi).toString());
+  }
+  if (els.sectionApiBtn) {
+    els.sectionApiBtn.classList.toggle('active', isApi);
+    els.sectionApiBtn.setAttribute('aria-pressed', isApi.toString());
+  }
+
+  if (isApi && !apiSectionInitialized) {
+    apiSectionInitialized = true;
+    loadApiKeys();
+    loadMailboxAddressingSettings();
+  }
+
+  if (!isApi && !usersSectionInitialized) {
+    loadUsers();
+  }
+}
+
 // 事件绑定
 els.back?.addEventListener('click', () => history.back());
 els.logout?.addEventListener('click', async () => { try { await api('/api/logout', { method: 'POST' }); } catch(_) {} location.replace('/html/login.html'); });
+els.sectionUsersBtn?.addEventListener('click', () => showAdminSection('users'));
+els.sectionApiBtn?.addEventListener('click', () => showAdminSection('api'));
 els.usersRefresh?.addEventListener('click', loadUsers);
 els.prevPage?.addEventListener('click', () => { if (currentPage > 1) { currentPage--; loadUsers(); }});
 els.nextPage?.addEventListener('click', () => { const totalPages = Math.ceil(totalUsers / pageSize); if (currentPage < totalPages) { currentPage++; loadUsers(); }});
 
+// 创建用户模态框
 els.uOpen?.addEventListener('click', () => els.uModal?.classList.add('show'));
 els.uClose?.addEventListener('click', () => els.uModal?.classList.remove('show'));
 els.uCancel?.addEventListener('click', () => els.uModal?.classList.remove('show'));
 els.uCreate?.addEventListener('click', handleCreateUser);
 
-els.aOpen?.addEventListener('click', () => els.aModal?.classList.add('show'));
-els.aClose?.addEventListener('click', () => els.aModal?.classList.remove('show'));
-els.aCancel?.addEventListener('click', () => els.aModal?.classList.remove('show'));
-els.aAssign?.addEventListener('click', handleAssignMailbox);
-
-els.unassignOpen?.addEventListener('click', () => els.unassignModal?.classList.add('show'));
-els.unassignClose?.addEventListener('click', () => els.unassignModal?.classList.remove('show'));
-els.unassignCancel?.addEventListener('click', () => els.unassignModal?.classList.remove('show'));
-els.unassignSubmit?.addEventListener('click', handleUnassignMailbox);
-
-els.editClose?.addEventListener('click', () => els.editModal?.classList.remove('show'));
-els.editCancel?.addEventListener('click', () => els.editModal?.classList.remove('show'));
-els.editSave?.addEventListener('click', saveEdit);
-els.editDelete?.addEventListener('click', async () => {
-  if (!currentViewingUser) return;
-  const confirmed = await showConfirm(`确定删除用户 ${currentViewingUser.username}？`);
-  if (!confirmed) return;
-  try {
-    await deleteUser(currentViewingUser.id);
-    showToast('删除成功', 'success');
-    els.editModal?.classList.remove('show');
-    loadUsers();
-  } catch (_) {
-    showToast('删除失败', 'error');
-  }
-});
-
-els.mailboxesPrevPage?.addEventListener('click', () => {
-  if (mailboxPage > 1) {
-    mailboxPage--;
-    loadUserMailboxes();
-  }
-});
-els.mailboxesNextPage?.addEventListener('click', () => {
-  const totalPages = Math.ceil(totalMailboxes / mailboxPageSize);
-  if (mailboxPage < totalPages) {
-    mailboxPage++;
-    loadUserMailboxes();
-  }
-});
-
+// API Key 管理
 els.apiKeysRefresh?.addEventListener('click', loadApiKeys);
 els.apiKeyCreateOpen?.addEventListener('click', () => els.apiKeyCreateModal?.classList.add('show'));
 els.apiKeyCreateClose?.addEventListener('click', () => els.apiKeyCreateModal?.classList.remove('show'));
 els.apiKeyCreateCancel?.addEventListener('click', () => els.apiKeyCreateModal?.classList.remove('show'));
 els.apiKeyCreateSubmit?.addEventListener('click', handleCreateApiKey);
+els.mailboxSettingsSave?.addEventListener('click', saveMailboxAddressingSettings);
 els.apiKeyResultClose?.addEventListener('click', () => els.apiKeyResultModal?.classList.remove('show'));
 els.apiKeyResultOk?.addEventListener('click', () => els.apiKeyResultModal?.classList.remove('show'));
 els.apiKeyCopy?.addEventListener('click', async () => {
   try {
     await navigator.clipboard.writeText(els.apiKeyValue?.value || '');
-    showToast('已复制 API Key', 'success');
+    showToast('API Key 已复制', 'success');
   } catch (_) {
-    showToast('复制失败', 'error');
+    showToast('复制失败，请手动复制', 'warning');
   }
 });
-els.mailboxSettingsSave?.addEventListener('click', saveMailboxAddressingSettings);
 
-(async function init() {
-  await loadSessionInfo();
-  await Promise.all([
-    loadUsers(),
-    loadApiKeys(),
-    loadMailboxAddressingSettings()
-  ]);
-})();
+// 分配邮箱模态框
+els.aOpen?.addEventListener('click', () => els.aModal?.classList.add('show'));
+els.aClose?.addEventListener('click', () => els.aModal?.classList.remove('show'));
+els.aCancel?.addEventListener('click', () => els.aModal?.classList.remove('show'));
+els.aAssign?.addEventListener('click', handleAssignMailbox);
+
+// 取消分配模态框
+els.unassignOpen?.addEventListener('click', () => els.unassignModal?.classList.add('show'));
+els.unassignClose?.addEventListener('click', () => els.unassignModal?.classList.remove('show'));
+els.unassignCancel?.addEventListener('click', () => els.unassignModal?.classList.remove('show'));
+els.unassignSubmit?.addEventListener('click', handleUnassignMailbox);
+
+// 编辑模态框
+els.editClose?.addEventListener('click', () => els.editModal?.classList.remove('show'));
+els.editCancel?.addEventListener('click', () => els.editModal?.classList.remove('show'));
+els.editSave?.addEventListener('click', saveEdit);
+els.editDelete?.addEventListener('click', async () => {
+  if (!currentViewingUser) return;
+
+  const confirmed = await showConfirm(`确定删除用户 "${currentViewingUser.username}" 吗？此操作不可恢复。`);
+  if (!confirmed) return;
+
+  try {
+    await deleteUser(currentViewingUser.id);
+    showToast('用户已删除', 'success');
+    els.editModal?.classList.remove('show');
+    loadUsers();
+  } catch(e) { showToast('删除失败', 'error'); }
+});
+
+// 邮箱分页
+els.mailboxesPrevPage?.addEventListener('click', () => { if (mailboxPage > 1) { mailboxPage--; loadUserMailboxes(); }});
+els.mailboxesNextPage?.addEventListener('click', () => { const totalPages = Math.ceil(totalMailboxes / mailboxPageSize); if (mailboxPage < totalPages) { mailboxPage++; loadUserMailboxes(); }});
+
+// 初始化
+await loadSessionInfo();
+const initialSection = new URLSearchParams(location.search).get('section') === 'api' ? 'api' : 'users';
+showAdminSection(initialSection);

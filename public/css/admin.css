@@ -1,7 +1,101 @@
+/* 压平布局与低动效覆盖 */
+.admin-container {
+  max-width: 1200px;
+  gap: 16px;
+  padding: 16px;
+  animation: none;
+  grid-template-columns: minmax(0, 1fr);
+}
 
-.api-card-actions {
+#admin-users-area,
+#admin-api-area {
   display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+
+.topbar .nav-actions {
+  display: flex;
+  flex-wrap: wrap;
   gap: 8px;
+}
+
+.topbar .btn.active {
+  background: #eff6ff;
+  border-color: #bfdbfe;
+  color: #1d4ed8;
+}
+
+.admin-page,
+.admin-page .card,
+.admin-page .modal-card,
+.admin-page .input,
+.admin-page .select,
+.admin-page textarea,
+.topbar .btn,
+.admin-page .table tbody tr,
+.admin-page .toggle {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  animation: none !important;
+  transition: none !important;
+  transform: none !important;
+  box-shadow: none !important;
+}
+
+.admin-page::before,
+.admin-page::after,
+.admin-page .card::before,
+.admin-page .card::after,
+.generate-action .btn::before {
+  animation: none !important;
+  display: none !important;
+}
+
+.admin-page {
+  background: #f8fafc !important;
+}
+
+.admin-page .card,
+.admin-page .modal-card,
+.api-scope-item,
+.api-doc-callout {
+  background: #ffffff !important;
+  border-color: #e5e7eb !important;
+}
+
+.admin-page .card {
+  border-radius: 14px;
+  padding: 20px;
+}
+
+.admin-page .card h2 {
+  margin-bottom: 16px;
+}
+
+.generate-action-row {
+  gap: 10px;
+}
+
+.generate-action .btn,
+#mailbox-settings-save {
+  height: auto;
+  min-height: 44px;
+}
+
+.table-container {
+  overflow-x: auto;
+}
+
+@media (max-width: 900px) {
+  .admin-container {
+    padding: 12px;
+  }
+
+  .topbar .nav-actions {
+    width: 100%;
+  }
 }
 
 .api-doc-callout {

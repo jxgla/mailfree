@@ -6,7 +6,7 @@
 import { getCurrentUserKey } from './storage.js';
 import { openForwardDialog, toggleFavorite, batchSetFavorite, injectDialogStyles } from './mailbox-settings.js';
 import { api, loadMailboxes as fetchMailboxes, loadDomains as fetchDomains, deleteMailbox as apiDeleteMailbox, toggleLogin as apiToggleLogin, batchToggleLogin, resetPassword as apiResetPassword, changePassword as apiChangePassword } from './modules/mailboxes/api.js';
-import { formatTime, escapeHtml, generateSkeleton, renderGrid, renderList } from './modules/mailboxes/render.js';
+import { formatTime, escapeHtml, generateSkeleton, patchMailboxCollection, patchMailboxEmailPanel } from './modules/mailboxes/render.js';
 
 injectDialogStyles();
 
@@ -18,6 +18,12 @@ const els = {
   grid: document.getElementById('grid'),
   empty: document.getElementById('empty'),
   loadingPlaceholder: document.getElementById('loading-placeholder'),
+  mailboxEmailsPanel: document.getElementById('mailbox-emails-panel'),
+  mailboxEmailsTitle: document.getElementById('mailbox-emails-title'),
+  mailboxEmailsRefresh: document.getElementById('mailbox-emails-refresh'),
+  mailboxEmailsLoading: document.getElementById('mailbox-emails-loading'),
+  mailboxEmailsEmpty: document.getElementById('mailbox-emails-empty'),
+  mailboxEmailsList: document.getElementById('mailbox-emails-list'),
   q: document.getElementById('q'),
   search: document.getElementById('search'),
   prev: document.getElementById('prev'),
@@ -64,19 +70,122 @@ const els = {
 
 // 状态
 let page = 1, PAGE_SIZE = 20, lastCount = 0, currentData = [];
-let currentView = localStorage.getItem('mf:mailboxes:view') || 'grid';
+let currentView = localStorage.getItem('mf:mailboxes:view') || 'list';
 let searchTimeout = null, isLoading = false;
 let availableDomains = [];
+let hasLoadedOnce = false;
+let selectedMailbox = '';
+let selectedMailboxEmails = [];
+let listRefreshTimer = null;
+let selectedMailboxEmailsMarker = '';
+let currentListMarker = '';
+const AUTO_REFRESH_INTERVAL = 15000;
+
+function getMailboxListMarker(list = []) {
+  return list.map((item) => `${item?.address || ''}:${item?.created_at || ''}:${Number(item?.can_login || false)}:${Number(item?.is_favorite || false)}:${item?.forward_to || ''}`).join('|');
+}
+
+function getMailboxEmailsMarker(mailList = []) {
+  return mailList.map((item) => `${item?.id ?? ''}:${item?.received_at || item?.created_at || ''}:${item?.subject || ''}:${item?.verification_code || ''}`).join('|');
+}
+
+function renderMailboxSelectionState() {
+  if (!els.grid) return;
+  els.grid.querySelectorAll('[data-address]').forEach((item) => {
+    const address = item.dataset.address;
+    item.classList.toggle('active', Boolean(selectedMailbox && address === selectedMailbox));
+  });
+}
+
+function renderMailboxEmailsPanel() {
+  if (!els.mailboxEmailsPanel || !els.mailboxEmailsList || !els.mailboxEmailsTitle) return;
+
+  if (!selectedMailbox) {
+    els.mailboxEmailsPanel.style.display = 'none';
+    els.mailboxEmailsList.innerHTML = '';
+    selectedMailboxEmailsMarker = '';
+    if (els.mailboxEmailsEmpty) els.mailboxEmailsEmpty.style.display = 'none';
+    return;
+  }
+
+  els.mailboxEmailsPanel.style.display = '';
+  els.mailboxEmailsTitle.textContent = `${selectedMailbox} 的邮件`;
+
+  if (!selectedMailboxEmails.length) {
+    selectedMailboxEmailsMarker = 'empty';
+    els.mailboxEmailsList.innerHTML = '';
+    if (els.mailboxEmailsEmpty) els.mailboxEmailsEmpty.style.display = 'block';
+    return;
+  }
+
+  if (els.mailboxEmailsEmpty) els.mailboxEmailsEmpty.style.display = 'none';
+  const marker = getMailboxEmailsMarker(selectedMailboxEmails);
+  if (marker !== selectedMailboxEmailsMarker) {
+    patchMailboxEmailPanel(selectedMailboxEmails, els.mailboxEmailsList);
+    selectedMailboxEmailsMarker = marker;
+  }
+}
+
+async function loadMailboxEmails(options = {}) {
+  const mailbox = options.mailbox || selectedMailbox;
+  if (!mailbox) return;
+
+  if (els.mailboxEmailsLoading) els.mailboxEmailsLoading.style.display = 'flex';
+  try {
+    const r = await api(`/api/emails?mailbox=${encodeURIComponent(mailbox)}`);
+    const list = await r.json();
+    selectedMailboxEmails = (Array.isArray(list) ? list : []).sort((a, b) => {
+      const ta = new Date(a?.received_at || a?.created_at || 0).getTime() || 0;
+      const tb = new Date(b?.received_at || b?.created_at || 0).getTime() || 0;
+      return tb - ta;
+    });
+  } catch (e) {
+    selectedMailboxEmails = [];
+    showToast('加载邮件失败', 'error');
+  } finally {
+    if (els.mailboxEmailsLoading) els.mailboxEmailsLoading.style.display = 'none';
+    renderMailboxEmailsPanel();
+  }
+}
+
+function startAutoRefresh() {
+  stopAutoRefresh();
+  listRefreshTimer = setInterval(() => {
+    if (document.hidden) return;
+    load({ silent: true });
+    if (selectedMailbox) {
+      loadMailboxEmails({ mailbox: selectedMailbox, silent: true });
+    }
+  }, AUTO_REFRESH_INTERVAL);
+}
+
+function stopAutoRefresh() {
+  if (listRefreshTimer) {
+    clearInterval(listRefreshTimer);
+    listRefreshTimer = null;
+  }
+}
+
+async function selectMailboxInPage(address, options = {}) {
+  if (!address) return;
+  const shouldReload = options.force || selectedMailbox !== address;
+  selectedMailbox = address;
+  renderMailboxSelectionState();
+  if (shouldReload) {
+    await loadMailboxEmails({ mailbox: address });
+  } else {
+    renderMailboxEmailsPanel();
+  }
+}
 
 // 加载邮箱列表
-async function load() {
+async function load(options = {}) {
   if (isLoading) return;
   isLoading = true;
-  
-  // 显示骨架屏
-  if (els.grid) els.grid.innerHTML = generateSkeleton(currentView, 8);
+
+  if (!hasLoadedOnce && els.grid) els.grid.innerHTML = generateSkeleton(currentView, 8);
   if (els.empty) els.empty.style.display = 'none';
-  
+
   try {
     const params = { page, size: PAGE_SIZE };
     if (els.q?.value) params.q = els.q.value.trim();
@@ -84,23 +193,43 @@ async function load() {
     if (els.loginFilter?.value) params.login = els.loginFilter.value;
     if (els.favoriteFilter?.value) params.favorite = els.favoriteFilter.value;
     if (els.forwardFilter?.value) params.forward = els.forwardFilter.value;
-    
+
     const data = await fetchMailboxes(params);
     const list = Array.isArray(data) ? data : (data.list || []);
-    const total = data.total ?? list.length;
+    const sortedList = [...list].sort((a, b) => {
+      const ta = new Date(a?.created_at || 0).getTime() || 0;
+      const tb = new Date(b?.created_at || 0).getTime() || 0;
+      return tb - ta;
+    });
+    const total = data.total ?? sortedList.length;
     lastCount = total;
-    currentData = list;
-    
-    if (!list.length) {
-      els.grid.innerHTML = '';
+    currentData = sortedList;
+
+    if (!sortedList.length) {
+      currentListMarker = '';
+      if (els.grid) els.grid.innerHTML = '';
       if (els.empty) els.empty.style.display = 'block';
     } else {
-      els.grid.innerHTML = currentView === 'grid' ? renderGrid(list) : renderList(list);
+      const marker = getMailboxListMarker(sortedList);
+      if (els.grid) {
+        if (!hasLoadedOnce || options.forceFresh || marker !== currentListMarker) {
+          patchMailboxCollection(sortedList, els.grid, currentView);
+          currentListMarker = marker;
+        }
+      }
       if (els.empty) els.empty.style.display = 'none';
     }
-    
+
+    if (selectedMailbox && !sortedList.some(m => m.address === selectedMailbox)) {
+      selectedMailbox = '';
+      selectedMailboxEmails = [];
+      selectedMailboxEmailsMarker = '';
+    }
+    renderMailboxSelectionState();
+    renderMailboxEmailsPanel();
+
+    hasLoadedOnce = true;
     updatePager();
-    bindCardEvents();
   } catch (e) {
     console.error('加载失败:', e);
     showToast('加载失败', 'error');
@@ -117,94 +246,99 @@ function updatePager() {
   if (els.next) els.next.disabled = page >= totalPages;
 }
 
-// 绑定卡片事件
+// 绑定卡片事件（事件委托）
 function bindCardEvents() {
-  // 绑定卡片点击跳转（网格视图）
-  els.grid?.querySelectorAll('.mailbox-card[data-action="jump"]').forEach(card => {
-    card.onclick = (e) => {
-      // 如果点击的是按钮区域，不跳转
-      if (e.target.closest('.actions')) return;
-      const address = card.dataset.address;
-      if (address) {
-        showToast('跳转中...', 'info', 500);
-        setTimeout(() => location.href = `/?mailbox=${encodeURIComponent(address)}`, 600);
+  if (!els.grid || els.grid.dataset.bound === '1') return;
+  els.grid.dataset.bound = '1';
+
+  els.grid.addEventListener('click', async (e) => {
+    const actionEl = e.target.closest('[data-action]');
+    const itemEl = e.target.closest('[data-address]');
+
+    if (!itemEl) return;
+
+    const address = itemEl.dataset.address;
+    if (!address) return;
+
+    const action = actionEl?.dataset.action;
+
+    if (!actionEl || (actionEl === itemEl && action === 'jump')) {
+      await selectMailboxInPage(address);
+      return;
+    }
+
+    e.stopPropagation();
+
+    switch (action) {
+      case 'copy':
+        try {
+          await navigator.clipboard.writeText(address);
+          showToast('已复制', 'success');
+        } catch (_) {
+          showToast('复制失败', 'error');
+        }
+        break;
+      case 'jump':
+        await selectMailboxInPage(address);
+        break;
+      case 'pin':
+        try {
+          const pinRes = await api(`/api/mailboxes/pin?address=${encodeURIComponent(address)}`, { method: 'POST' });
+          if (!pinRes.ok) throw new Error('pin failed');
+          showToast('置顶状态已更新', 'success');
+          await load();
+        } catch (_) {
+          showToast('操作失败', 'error');
+        }
+        break;
+      case 'forward': {
+        const m = currentData.find(x => x.address === address);
+        if (m && m.id) openForwardDialog(m.id, m.address, m.forward_to);
+        break;
       }
-    };
-  });
-  
-  // 绑定按钮操作
-  els.grid?.querySelectorAll('[data-action]').forEach(btn => {
-    // 跳过卡片本身（只处理按钮）
-    if (btn.classList.contains('mailbox-card') || btn.classList.contains('mailbox-list-item')) return;
-    
-    btn.onclick = async (e) => {
-      e.stopPropagation();
-      const card = btn.closest('[data-address]');
-      const address = card?.dataset.address;
-      const id = card?.dataset.id;
-      const action = btn.dataset.action;
-      
-      if (!address) return;
-      
-      switch (action) {
-        case 'copy':
-          try { await navigator.clipboard.writeText(address); showToast('已复制', 'success'); }
-          catch(_) { showToast('复制失败', 'error'); }
-          break;
-        case 'jump':
-          showToast('跳转中...', 'info', 500);
-          setTimeout(() => location.href = `/?mailbox=${encodeURIComponent(address)}`, 600);
-          break;
-        case 'pin':
-          try {
-            const pinRes = await api(`/api/mailboxes/pin?address=${encodeURIComponent(address)}`, {
-              method: 'POST'
-            });
-            if (pinRes.ok) {
-              showToast('置顶状态已更新', 'success');
-              load();
-            } else {
-              showToast('操作失败', 'error');
-            }
-          } catch(e) { showToast('操作失败', 'error'); }
-          break;
-        case 'forward':
-          const m = currentData.find(x => x.address === address);
-          if (m && m.id) openForwardDialog(m.id, m.address, m.forward_to);
-          break;
-        case 'favorite':
-          const mb = currentData.find(x => x.address === address);
-          if (mb && mb.id) { 
-            const result = await toggleFavorite(mb.id); 
-            if (result.success) load();
-          }
-          break;
-        case 'login':
-          const mailbox = currentData.find(x => x.address === address);
-          if (mailbox) {
-            try {
-              await apiToggleLogin(address, !mailbox.can_login);
-              showToast(mailbox.can_login ? '已禁止登录' : '已允许登录', 'success');
-              load();
-            } catch(e) { showToast('操作失败', 'error'); }
-          }
-          break;
-        case 'password':
-          const pwMailbox = currentData.find(x => x.address === address);
-          if (pwMailbox) {
-            openPasswordModal(address, pwMailbox.password_is_default);
-          }
-          break;
-        case 'delete':
-          if (!confirm(`确定删除邮箱 ${address}？`)) return;
-          try {
-            await apiDeleteMailbox(address);
-            showToast('已删除', 'success');
-            load();
-          } catch(e) { showToast('删除失败', 'error'); }
-          break;
+      case 'favorite': {
+        const mb = currentData.find(x => x.address === address);
+        if (mb && mb.id) {
+          const result = await toggleFavorite(mb.id);
+          if (result.success) await load();
+        }
+        break;
       }
-    };
+      case 'login': {
+        const mailbox = currentData.find(x => x.address === address);
+        if (mailbox) {
+          try {
+            await apiToggleLogin(address, !mailbox.can_login);
+            showToast(mailbox.can_login ? '已禁止登录' : '已允许登录', 'success');
+            await load();
+          } catch (_) {
+            showToast('操作失败', 'error');
+          }
+        }
+        break;
+      }
+      case 'password': {
+        const pwMailbox = currentData.find(x => x.address === address);
+        if (pwMailbox) openPasswordModal(address, pwMailbox.password_is_default);
+        break;
+      }
+      case 'delete':
+        if (!confirm(`确定删除邮箱 ${address}？`)) return;
+        try {
+          await apiDeleteMailbox(address);
+          showToast('已删除', 'success');
+          await load();
+        } catch (_) {
+          showToast('删除失败', 'error');
+        }
+        break;
+      default:
+        break;
+    }
+
+    if (selectedMailbox && selectedMailbox === address) {
+      await loadMailboxEmails({ mailbox: selectedMailbox, force: true });
+    }
   });
 }
 
@@ -212,13 +346,15 @@ function bindCardEvents() {
 function switchView(view) {
   if (currentView === view) return;
   currentView = view;
+  currentListMarker = '';
   localStorage.setItem('mf:mailboxes:view', view);
   els.viewGrid?.classList.toggle('active', view === 'grid');
   els.viewList?.classList.toggle('active', view === 'list');
   els.grid.className = view;
   if (currentData.length) {
-    els.grid.innerHTML = view === 'grid' ? renderGrid(currentData) : renderList(currentData);
-    bindCardEvents();
+    patchMailboxCollection(currentData, els.grid, view);
+    currentListMarker = getMailboxListMarker(currentData);
+    renderMailboxSelectionState();
   }
 }
 
@@ -246,9 +382,8 @@ let currentPasswordIsDefault = false;
 function openPasswordModal(address, isDefault) {
   currentPasswordAddress = address;
   currentPasswordIsDefault = isDefault;
-  
+
   if (isDefault) {
-    // 设置新密码
     if (els.passwordModalIcon) els.passwordModalIcon.textContent = '🔐';
     if (els.passwordModalTitle) els.passwordModalTitle.textContent = '设置密码';
     if (els.passwordModalMessage) els.passwordModalMessage.innerHTML = `为 <strong>${address}</strong> 设置新密码：`;
@@ -257,13 +392,12 @@ function openPasswordModal(address, isDefault) {
     if (els.passwordShowToggle) els.passwordShowToggle.checked = false;
     if (els.passwordNewInput) els.passwordNewInput.type = 'password';
   } else {
-    // 重置密码
     if (els.passwordModalIcon) els.passwordModalIcon.textContent = '🔓';
     if (els.passwordModalTitle) els.passwordModalTitle.textContent = '重置密码';
     if (els.passwordModalMessage) els.passwordModalMessage.innerHTML = `确定将 <strong>${address}</strong> 的密码重置为默认密码（邮箱地址）？`;
     if (els.passwordInputWrapper) els.passwordInputWrapper.style.display = 'none';
   }
-  
+
   if (els.passwordModal) els.passwordModal.style.display = 'flex';
   if (isDefault && els.passwordNewInput) {
     setTimeout(() => els.passwordNewInput.focus(), 100);
@@ -280,17 +414,16 @@ function closePasswordModal() {
 // 执行密码操作
 async function executePasswordAction() {
   if (!currentPasswordAddress) return;
-  
+
   const btnText = els.passwordModalConfirm?.querySelector('.password-btn-text');
   const btnLoading = els.passwordModalConfirm?.querySelector('.password-btn-loading');
   if (btnText) btnText.style.display = 'none';
   if (btnLoading) btnLoading.style.display = 'inline';
   if (els.passwordModalConfirm) els.passwordModalConfirm.disabled = true;
-  
+
   try {
     let res;
     if (currentPasswordIsDefault) {
-      // 设置新密码
       const newPwd = els.passwordNewInput?.value?.trim();
       if (!newPwd) {
         showToast('请输入新密码', 'error');
@@ -298,10 +431,9 @@ async function executePasswordAction() {
       }
       res = await apiChangePassword(currentPasswordAddress, newPwd);
     } else {
-      // 重置密码
       res = await apiResetPassword(currentPasswordAddress);
     }
-    
+
     if (res.ok) {
       showToast(currentPasswordIsDefault ? '密码已设置' : '密码已重置', 'success');
       closePasswordModal();
@@ -328,13 +460,12 @@ function openBatchModal(action, title, icon, message) {
   if (els.batchEmailsInput) els.batchEmailsInput.value = '';
   if (els.batchCountInfo) els.batchCountInfo.textContent = '输入邮箱后将显示数量统计';
   if (els.batchModalConfirm) els.batchModalConfirm.disabled = true;
-  
-  // 显示/隐藏转发目标输入
+
   if (els.batchForwardWrapper) {
     els.batchForwardWrapper.style.display = action === 'forward' ? 'block' : 'none';
   }
   if (els.batchForwardTarget) els.batchForwardTarget.value = '';
-  
+
   if (els.batchModal) els.batchModal.style.display = 'flex';
 }
 
@@ -366,13 +497,13 @@ function updateBatchCount() {
 async function executeBatchAction() {
   const emails = parseEmails(els.batchEmailsInput?.value || '');
   if (!emails.length) return;
-  
+
   const btnText = els.batchModalConfirm?.querySelector('.batch-btn-text');
   const btnLoading = els.batchModalConfirm?.querySelector('.batch-btn-loading');
   if (btnText) btnText.style.display = 'none';
   if (btnLoading) btnLoading.style.display = 'inline';
   if (els.batchModalConfirm) els.batchModalConfirm.disabled = true;
-  
+
   try {
     let result;
     switch (currentBatchAction) {
@@ -396,7 +527,7 @@ async function executeBatchAction() {
           body: JSON.stringify({ addresses: emails, is_favorite: false })
         });
         break;
-      case 'forward':
+      case 'forward': {
         const forwardTo = els.batchForwardTarget?.value?.trim();
         if (!forwardTo) { showToast('请输入转发目标', 'error'); return; }
         result = await api('/api/mailboxes/batch-forward-by-address', {
@@ -405,6 +536,7 @@ async function executeBatchAction() {
           body: JSON.stringify({ addresses: emails, forward_to: forwardTo })
         });
         break;
+      }
       case 'clear-forward':
         result = await api('/api/mailboxes/batch-forward-by-address', {
           method: 'POST',
@@ -412,10 +544,15 @@ async function executeBatchAction() {
           body: JSON.stringify({ addresses: emails, forward_to: null })
         });
         break;
+      default:
+        break;
     }
     showToast('批量操作完成', 'success');
     closeBatchModal();
-    load();
+    await load();
+    if (selectedMailbox) {
+      await loadMailboxEmails({ mailbox: selectedMailbox, force: true });
+    }
   } catch (e) {
     showToast('操作失败: ' + (e.message || '未知错误'), 'error');
   } finally {
@@ -430,7 +567,7 @@ els.search?.addEventListener('click', () => { page = 1; load(); });
 els.q?.addEventListener('input', () => { if (searchTimeout) clearTimeout(searchTimeout); searchTimeout = setTimeout(() => { page = 1; load(); }, 300); });
 els.q?.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); page = 1; load(); }});
 els.prev?.addEventListener('click', () => { if (page > 1 && !isLoading) { page--; load(); }});
-els.next?.addEventListener('click', () => { 
+els.next?.addEventListener('click', () => {
   const totalPages = Math.max(1, Math.ceil(lastCount / PAGE_SIZE));
   if (page < totalPages && !isLoading) { page++; load(); }
 });
@@ -441,6 +578,7 @@ els.forwardFilter?.addEventListener('change', () => { page = 1; load(); });
 els.viewGrid?.addEventListener('click', () => switchView('grid'));
 els.viewList?.addEventListener('click', () => switchView('list'));
 els.logout?.addEventListener('click', async () => { try { await fetch('/api/logout', { method: 'POST' }); } catch(_) {} location.replace('/html/login.html'); });
+els.mailboxEmailsRefresh?.addEventListener('click', () => loadMailboxEmails({ force: true }));
 
 // 批量操作按钮
 els.batchAllow?.addEventListener('click', () => openBatchModal('allow', '批量放行登录', '✅', '输入要允许登录的邮箱地址（每行一个或用逗号分隔）：'));
@@ -477,18 +615,16 @@ els.passwordNewInput?.addEventListener('keydown', (e) => {
 
 // 初始化 guest 模式
 async function initGuestMode() {
-  // 初始化全局变量
   if (typeof window.__GUEST_MODE__ === 'undefined') {
     window.__GUEST_MODE__ = false;
   }
-  
+
   try {
     const sessionResp = await fetch('/api/session');
     if (sessionResp.ok) {
       const session = await sessionResp.json();
       if (session.role === 'guest' || session.username === 'guest') {
         window.__GUEST_MODE__ = true;
-        // 初始化 mock 数据
         const { MOCK_STATE, buildMockMailboxes } = await import('./modules/app/mock-api.js');
         if (!MOCK_STATE.mailboxes.length) {
           MOCK_STATE.mailboxes = buildMockMailboxes(6, 2, MOCK_STATE.domains);
@@ -502,14 +638,20 @@ async function initGuestMode() {
 
 // 初始化
 (async () => {
-  // 先检查 guest 模式
   await initGuestMode();
-  
-  // 设置初始视图模式
+
   els.viewGrid?.classList.toggle('active', currentView === 'grid');
   els.viewList?.classList.toggle('active', currentView === 'list');
   if (els.grid) els.grid.className = currentView;
-  
+
   await loadDomainsFilter();
+  bindCardEvents();
   await load();
+  startAutoRefresh();
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) {
+      load({ silent: true });
+      if (selectedMailbox) loadMailboxEmails({ mailbox: selectedMailbox, silent: true });
+    }
+  });
 })();

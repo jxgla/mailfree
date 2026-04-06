@@ -6,6 +6,12 @@
 import { formatTs, escapeHtml, escapeAttr } from './ui-helpers.js';
 import { getCurrentMailbox } from './mailbox-state.js';
 
+function createElementFromHtml(html) {
+  const template = document.createElement('template');
+  template.innerHTML = html.trim();
+  return template.content.firstElementChild;
+}
+
 // 分页状态
 const MB_PAGE_SIZE = 10;
 let mbPage = 1;
@@ -28,7 +34,7 @@ export function renderMailboxItem(mailbox, isActive = false) {
   const time = formatTs(m.created_at);
   
   return `
-    <div class="mailbox-item ${isPinned} ${activeClass}" onclick="selectMailbox('${address}')">
+    <div class="mailbox-item ${isPinned} ${activeClass}" data-address="${address}" onclick="selectMailbox('${address}')">
       <div class="mailbox-content">
         <span class="address">${displayAddress}</span>
         <span class="time">${time}</span>
@@ -47,14 +53,132 @@ export function renderMailboxItem(mailbox, isActive = false) {
  */
 export function renderMailboxList(mailboxes, container) {
   if (!container) return;
-  
+
   if (!mailboxes || mailboxes.length === 0) {
     container.innerHTML = '<div class="empty-state" style="text-align:center;color:#64748b;padding:20px">暂无邮箱</div>';
     return;
   }
-  
+
   const currentMb = getCurrentMailbox();
   container.innerHTML = mailboxes.map(m => renderMailboxItem(m, m.address === currentMb)).join('');
+}
+
+export function patchMailboxList(mailboxes, container) {
+  if (!container) return false;
+
+  if (!mailboxes || mailboxes.length === 0) {
+    const nextEmpty = '<div class="empty-state" style="text-align:center;color:#64748b;padding:20px">暂无邮箱</div>';
+    if (container.innerHTML !== nextEmpty) {
+      container.innerHTML = nextEmpty;
+      return true;
+    }
+    return false;
+  }
+
+  const currentMb = getCurrentMailbox();
+  const existingNodes = new Map();
+  Array.from(container.querySelectorAll('.mailbox-item[data-address]')).forEach((node) => {
+    existingNodes.set(node.dataset.address || '', node);
+  });
+
+  let changed = false;
+  const nextNodes = [];
+
+  for (const mailbox of mailboxes) {
+    const address = String(mailbox?.address || '');
+    const isActive = address === currentMb;
+    const expectedPinned = Boolean(mailbox?.is_pinned);
+    const expectedTime = formatTs(mailbox?.created_at);
+    const expectedPinTitle = expectedPinned ? '取消置顶' : '置顶';
+    const expectedPinText = expectedPinned ? '📌' : '📍';
+
+    let node = existingNodes.get(address);
+    if (!node) {
+      node = createElementFromHtml(renderMailboxItem(mailbox, isActive));
+      changed = true;
+    } else {
+      existingNodes.delete(address);
+      const addressEl = node.querySelector('.address');
+      const timeEl = node.querySelector('.time');
+      const pinBtn = node.querySelector('.pin');
+
+      if (addressEl && addressEl.textContent !== address) {
+        addressEl.textContent = address;
+        changed = true;
+      }
+      if (timeEl && timeEl.textContent !== expectedTime) {
+        timeEl.textContent = expectedTime;
+        changed = true;
+      }
+      if (node.dataset.address !== address) {
+        node.dataset.address = address;
+        changed = true;
+      }
+
+      const hadPinned = node.classList.contains('pinned');
+      if (hadPinned !== expectedPinned) {
+        node.classList.toggle('pinned', expectedPinned);
+        changed = true;
+      }
+      const hadActive = node.classList.contains('active');
+      if (hadActive !== isActive) {
+        node.classList.toggle('active', isActive);
+        changed = true;
+      }
+
+      if (pinBtn) {
+        if (pinBtn.textContent !== expectedPinText) {
+          pinBtn.textContent = expectedPinText;
+          changed = true;
+        }
+        if (pinBtn.title !== expectedPinTitle) {
+          pinBtn.title = expectedPinTitle;
+          changed = true;
+        }
+        const onclickValue = `togglePin(event,'${escapeAttr(address)}')`;
+        if (pinBtn.getAttribute('onclick') !== onclickValue) {
+          pinBtn.setAttribute('onclick', onclickValue);
+          changed = true;
+        }
+      }
+
+      const deleteBtn = node.querySelector('.del');
+      if (deleteBtn) {
+        const onclickValue = `deleteMailbox(event,'${escapeAttr(address)}')`;
+        if (deleteBtn.getAttribute('onclick') !== onclickValue) {
+          deleteBtn.setAttribute('onclick', onclickValue);
+          changed = true;
+        }
+      }
+
+      const selectOnclick = `selectMailbox('${escapeAttr(address)}')`;
+      if (node.getAttribute('onclick') !== selectOnclick) {
+        node.setAttribute('onclick', selectOnclick);
+        changed = true;
+      }
+    }
+
+    nextNodes.push(node);
+  }
+
+  if (existingNodes.size) {
+    existingNodes.forEach((node) => node.remove());
+    changed = true;
+  }
+
+  nextNodes.forEach((node, index) => {
+    if (container.children[index] !== node) {
+      container.insertBefore(node, container.children[index] || null);
+      changed = true;
+    }
+  });
+
+  if (!container.querySelector('.mailbox-item[data-address]')) {
+    container.innerHTML = mailboxes.map(m => renderMailboxItem(m, m.address === currentMb)).join('');
+    return true;
+  }
+
+  return changed;
 }
 
 /**
@@ -192,6 +316,7 @@ export function filterBySearch(mailboxes, term) {
 export default {
   renderMailboxItem,
   renderMailboxList,
+  patchMailboxList,
   renderMbPager,
   getCurrentPage,
   setCurrentPage,

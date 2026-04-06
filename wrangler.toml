@@ -4,15 +4,22 @@ main = "src/server.js"
 compatibility_date = "2024-01-01"
 workers_dev = false
 preview_urls = false
+keep_vars = true
 
-[[routes]]
-pattern = "mail.gemnwong.dpdns.org"
-zone_name = "gemnwong.dpdns.org"
+# 注意：keep_vars 只会保留 Dashboard/远端已有变量（例如 MAIL_DOMAIN、JWT secrets 等），
+# 不会保留 routes/custom_domain 配置。部署前若本地 wrangler.toml 里的 routes/custom_domain
+# 与线上不一致，Wrangler 仍可能覆盖线上路由/自定义域名设置。
+# 推荐日常发布使用 `npm run deploy`（wrangler versions upload），只上传代码版本，不直接改 routes/custom_domain。
+# 如需完整改动 Worker 配置，再显式使用 `npm run deploy:full`。
 
-[[routes]]
-pattern = "mail.gemnwong.dpdns.org"
-zone_name = "gemnwong.dpdns.org"
-custom_domain = true
+# [[routes]]
+# pattern = "mail.gemnwong.dpdns.org"
+# zone_name = "gemnwong.dpdns.org"
+
+# [[routes]]
+# pattern = "mail.gemnwong.dpdns.org"
+# zone_name = "gemnwong.dpdns.org"
+# custom_domain = true
 
 [triggers]
 crons = ["*/5 * * * *"]
